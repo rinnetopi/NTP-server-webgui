@@ -1,0 +1,21 @@
+{
+  "name": "ntp-server-webgui",
+  "version": "1.0.0",
+  "description": "Simple web GUI for an NTP Raspberry Pi status exporter",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/rinnetopi/NTP-server-webgui"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
