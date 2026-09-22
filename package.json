@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "http://localhost:26831/rinnetopi/NTP-server-webgui"
+    "url": "https://github.com/rinnetopi/NTP-server-webgui.git"
   },
   "keywords": [],
   "author": "",

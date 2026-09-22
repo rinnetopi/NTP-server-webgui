@@ -106,7 +106,7 @@ function isValidCidrAddress(value) {
     return false;
   }
 
-  const match = value.trim().match(/^(\d{1,3})(?:\.(\d{1,3})){3}\/(\d|[12]\d|3[0-2])$/);
+  const match = value.trim().match(/^\d{1,3}(?:\.\d{1,3}){3}\/(?:\d|[12]\d|3[0-2])$/);
 
   if (!match) {
     return false;
@@ -175,7 +175,6 @@ function createApp(options = {}) {
       const status = normalizeExporterPayload(payload);
 
       response.json({
-        exporterUrl,
         networkInterface,
         ...status,
       });

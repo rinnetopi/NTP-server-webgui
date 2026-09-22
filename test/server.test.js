@@ -75,6 +75,40 @@ test('GET /api/status returns normalised exporter data', async (t) => {
   assert.equal(body.time, '2026-09-22T15:12:00Z');
 });
 
+test('GET /api/status returns 500 when the exporter URL is not configured', async (t) => {
+  const app = createApp({
+    exporterUrl: '',
+  });
+
+  const { server, url } = await startTestServer(app);
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/api/status`);
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(body.error, 'NTP_EXPORTER_URL is not configured.');
+});
+
+test('GET /api/status returns 502 when the exporter responds with an error', async (t) => {
+  const app = createApp({
+    exporterUrl: 'http://exporter.local/status',
+    fetchImpl: async () => ({
+      ok: false,
+      status: 503,
+    }),
+  });
+
+  const { server, url } = await startTestServer(app);
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/api/status`);
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.error, 'Exporter request failed with status 503.');
+});
+
 test('POST /api/network validates the request body and calls the applier', async (t) => {
   const calls = [];
   const app = createApp({
