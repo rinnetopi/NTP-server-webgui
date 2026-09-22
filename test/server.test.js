@@ -54,7 +54,17 @@ test('createApp rejects an invalid network interface name', () => {
       createApp({
         networkInterface: '--bad-interface',
       }),
-    /NETWORK_INTERFACE must contain only letters, numbers, underscores, or hyphens/,
+    /NETWORK_INTERFACE must start with a letter or number/,
+  );
+});
+
+test('createApp rejects a network interface name longer than 15 characters', () => {
+  assert.throws(
+    () =>
+      createApp({
+        networkInterface: 'abcdefghijklmnop',
+      }),
+    /15 characters or fewer/,
   );
 });
 

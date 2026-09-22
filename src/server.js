@@ -126,22 +126,24 @@ async function applyNetworkAddress({ interfaceName, cidrAddress }) {
 }
 
 function isValidInterfaceName(value) {
-  return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value);
+  return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,14}$/.test(value);
 }
 
 function createApp(options = {}) {
   const exporterUrl = options.exporterUrl ?? process.env.NTP_EXPORTER_URL ?? '';
   const networkInterface = options.networkInterface ?? process.env.NETWORK_INTERFACE ?? 'eth1';
-  const fetchImpl = options.fetchImpl ?? global.fetch;
+  const fetchImpl = options.fetchImpl ?? global.fetch ?? null;
   const networkApplier = options.networkApplier ?? applyNetworkAddress;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  if (typeof fetchImpl !== 'function') {
+  if (exporterUrl && typeof fetchImpl !== 'function') {
     throw new Error('A fetch implementation is required.');
   }
 
   if (!isValidInterfaceName(networkInterface)) {
-    throw new Error('NETWORK_INTERFACE must contain only letters, numbers, underscores, or hyphens.');
+    throw new Error(
+      'NETWORK_INTERFACE must start with a letter or number, use only letters, numbers, underscores, or hyphens, and be 15 characters or fewer.',
+    );
   }
 
   const app = express();
