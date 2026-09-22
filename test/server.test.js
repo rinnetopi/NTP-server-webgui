@@ -48,6 +48,16 @@ test('isValidCidrAddress accepts valid IPv4 CIDR strings', () => {
   assert.equal(isValidCidrAddress('10.0.0.10'), false);
 });
 
+test('createApp rejects an invalid network interface name', () => {
+  assert.throws(
+    () =>
+      createApp({
+        networkInterface: '--bad-interface',
+      }),
+    /NETWORK_INTERFACE must contain only letters, numbers, underscores, or hyphens/,
+  );
+});
+
 test('GET /api/status returns normalised exporter data', async (t) => {
   const app = createApp({
     exporterUrl: 'http://exporter.local/status',
@@ -55,9 +65,13 @@ test('GET /api/status returns normalised exporter data', async (t) => {
       ok: true,
       async json() {
         return {
-          ipAddress: '172.16.0.3',
-          internetConnected: false,
-          time: '2026-09-22T15:12:00Z',
+          network: {
+            ip: '172.16.0.3',
+            online: false,
+          },
+          ntp: {
+            time: '2026-09-22T15:12:00Z',
+          },
         };
       },
     }),

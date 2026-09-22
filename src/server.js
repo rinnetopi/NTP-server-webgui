@@ -125,9 +125,12 @@ async function applyNetworkAddress({ interfaceName, cidrAddress }) {
   await execFileAsync('ip', ['link', 'set', interfaceName, 'up']);
 }
 
+function isValidInterfaceName(value) {
+  return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value);
+}
+
 function createApp(options = {}) {
   const exporterUrl = options.exporterUrl ?? process.env.NTP_EXPORTER_URL ?? '';
-  const port = Number(options.port ?? process.env.PORT ?? 3000);
   const networkInterface = options.networkInterface ?? process.env.NETWORK_INTERFACE ?? 'eth1';
   const fetchImpl = options.fetchImpl ?? global.fetch;
   const networkApplier = options.networkApplier ?? applyNetworkAddress;
@@ -135,6 +138,10 @@ function createApp(options = {}) {
 
   if (typeof fetchImpl !== 'function') {
     throw new Error('A fetch implementation is required.');
+  }
+
+  if (!isValidInterfaceName(networkInterface)) {
+    throw new Error('NETWORK_INTERFACE must contain only letters, numbers, underscores, or hyphens.');
   }
 
   const app = express();
@@ -214,15 +221,14 @@ function createApp(options = {}) {
   app.locals.config = {
     exporterUrl,
     networkInterface,
-    port,
   };
 
   return app;
 }
 
-function startServer() {
-  const app = createApp();
-  const { port } = app.locals.config;
+function startServer(options = {}) {
+  const app = createApp(options);
+  const port = Number(options.port ?? process.env.PORT ?? 3000);
 
   app.listen(port, () => {
     console.log(`NTP web UI listening on http://0.0.0.0:${port}`);
@@ -233,7 +239,9 @@ module.exports = {
   applyNetworkAddress,
   createApp,
   isValidCidrAddress,
+  isValidInterfaceName,
   normalizeExporterPayload,
+  startServer,
 };
 
 if (require.main === module) {
