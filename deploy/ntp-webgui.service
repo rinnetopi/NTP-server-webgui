@@ -10,6 +10,10 @@ ExecStart=/usr/bin/node src/server.js
 Restart=on-failure
 RestartSec=5
 
+# Grant permission to manage network interfaces
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+
 # Environment – edit these to match your setup
 Environment=PORT=8080
 Environment=NTP_EXPORTER_URL=http://localhost:9559/metrics/json
