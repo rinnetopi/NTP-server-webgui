@@ -10,7 +10,7 @@ const interfaceLabel = document.getElementById('interfaceLabel');
 
 function setMessage(element, message, isError = false) {
   element.textContent = message;
-  element.style.color = isError ? '#fca5a5' : '#93c5fd';
+  element.style.color = isError ? '#e07070' : '#6aaa6a';
 }
 
 function renderStatus(status) {

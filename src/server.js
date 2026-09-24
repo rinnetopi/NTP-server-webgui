@@ -122,7 +122,19 @@ function isValidCidrAddress(value) {
 
 async function applyNetworkAddress({ interfaceName, cidrAddress }) {
   await execFileAsync('ip', ['addr', 'replace', cidrAddress, 'dev', interfaceName]);
-  await execFileAsync('ip', ['link', 'set', interfaceName, 'up']);
+
+  // Attempt to bring the interface up. Only suppress errors that indicate the
+  // interface is not yet physically present; all other errors (permissions,
+  // typo in interface name, kernel errors) are re-thrown.
+  try {
+    await execFileAsync('ip', ['link', 'set', interfaceName, 'up']);
+  } catch (error) {
+    const stderr = (error.stderr ?? '').toString();
+    if (!stderr.includes('Cannot find device')) {
+      throw error;
+    }
+    // interface not present yet – address is still recorded for when it comes up
+  }
 }
 
 function isValidInterfaceName(value) {

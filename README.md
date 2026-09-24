@@ -6,15 +6,19 @@ Simple web UI for a Raspberry Pi NTP server.
 
 - Shows the exporter IP address, internet status, and current time
 - Lets you refresh the latest exporter values from the browser
-- Lets you update the `eth1` address with an IPv4 CIDR value such as `192.168.1.50/24`
+- Lets you update the `eth1` address with an IPv4 CIDR value such as `192.168.1.50/24` — even when the interface is currently down
 
 ## Configuration
 
 Set these environment variables before starting the server:
 
-- `NTP_EXPORTER_URL` - URL of your local JSON exporter
-- `PORT` - optional HTTP port, defaults to `3000`
-- `NETWORK_INTERFACE` - optional network adapter name, defaults to `eth1`
+| Variable | Default | Description |
+|---|---|---|
+| `NTP_EXPORTER_URL` | *(required)* | URL of your local JSON exporter, e.g. `http://localhost:9559/metrics/json` |
+| `PORT` | `3000` | HTTP port the web UI listens on |
+| `NETWORK_INTERFACE` | `eth1` | Network adapter to manage |
+
+The exporter endpoint must return a JSON object. The app looks for common field names such as `ipAddress`, `internetConnected`, and `time`.
 
 ## Run locally
 
@@ -25,11 +29,42 @@ NTP_EXPORTER_URL=http://127.0.0.1:9090/status npm start
 
 Then open `http://127.0.0.1:3000`.
 
+## Run as a systemd service (auto-start at boot)
+
+1. Install the application:
+
+   ```bash
+   sudo cp -r . /opt/ntp-server-webgui
+   cd /opt/ntp-server-webgui && sudo npm install --omit=dev
+   ```
+
+2. Copy and edit the service unit:
+
+   ```bash
+   sudo cp deploy/ntp-webgui.service /etc/systemd/system/
+   sudo nano /etc/systemd/system/ntp-webgui.service
+   # Set NTP_EXPORTER_URL, PORT, and NETWORK_INTERFACE to match your setup
+   ```
+
+3. Enable and start the service:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now ntp-webgui
+   ```
+
+4. Check the status:
+
+   ```bash
+   sudo systemctl status ntp-webgui
+   ```
+
+The service unit file is at [`deploy/ntp-webgui.service`](deploy/ntp-webgui.service).
+
 ## Notes
 
-- The exporter endpoint must return a JSON object. The app looks for common keys such as `ipAddress`, `internetConnected`, and `time`.
-- Updating the network address uses the `ip` command, so the process must have permission to manage the selected network interface.
-- The address update changes the active address. If you also need persistence across reboots, update your Raspberry Pi network configuration separately.
+- Updating the network address uses the `ip` command, so the process must have permission to manage the selected network interface (e.g. run as root or grant `CAP_NET_ADMIN`).
+- The address update sets the address in the running kernel. If the interface is down at the time, the change still succeeds and takes effect when the interface comes up. For persistence across reboots, update `/etc/network/interfaces` or your system's network configuration.
 
 ## Test
 
