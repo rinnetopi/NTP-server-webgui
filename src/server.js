@@ -122,7 +122,15 @@ function isValidCidrAddress(value) {
 
 async function applyNetworkAddress({ interfaceName, cidrAddress }) {
   await execFileAsync('ip', ['addr', 'replace', cidrAddress, 'dev', interfaceName]);
-  await execFileAsync('ip', ['link', 'set', interfaceName, 'up']);
+
+  // Attempt to bring the interface up. Ignore the error when the interface is
+  // not yet active so the address is still recorded in the kernel for when it
+  // comes up later.
+  try {
+    await execFileAsync('ip', ['link', 'set', interfaceName, 'up']);
+  } catch {
+    // non-fatal: interface may not be physically present yet
+  }
 }
 
 function isValidInterfaceName(value) {

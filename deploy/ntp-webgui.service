@@ -1,0 +1,19 @@
+[Unit]
+Description=NTP Server Web GUI
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/ntp-server-webgui
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+
+# Environment – edit these to match your setup
+Environment=PORT=8080
+Environment=NTP_EXPORTER_URL=http://localhost:9559/metrics/json
+Environment=NETWORK_INTERFACE=eth1
+
+[Install]
+WantedBy=multi-user.target
