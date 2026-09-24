@@ -75,7 +75,7 @@ function parsePlainTextPayload(text) {
   const ram = ramRaw != null ? parseFloat(ramRaw) : null;
 
   return {
-    ipAddress: ipAddress === 'Down' ? null : ipAddress,
+    ipAddress: ipAddress?.toLowerCase() === 'down' ? null : ipAddress,
     internetConnected,
     time,
     cpu,
