@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApp, isValidCidrAddress, normalizeExporterPayload } = require('../src/server');
+const { createApp, isValidCidrAddress, parsePlainTextPayload } = require('../src/server');
 
 async function startTestServer(app) {
   return await new Promise((resolve) => {
@@ -14,31 +14,36 @@ async function startTestServer(app) {
   });
 }
 
-test('normalizeExporterPayload returns the expected dashboard fields', () => {
-  const status = normalizeExporterPayload({
-    network: {
-      ip: '192.168.1.20',
-      online: 'yes',
-    },
-    ntp: {
-      time: '2026-09-22T15:00:00Z',
-    },
-  });
+test('parsePlainTextPayload returns the expected dashboard fields', () => {
+  const status = parsePlainTextPayload(
+    'NTP: 192.168.1.20\nTime: Stratum 1\nNet: Online (eth0)\nCPU: 12.5%\nTemp: 45.2°C\nRAM: 34.1%',
+  );
 
   assert.deepEqual(status, {
     ipAddress: '192.168.1.20',
     internetConnected: true,
-    time: '2026-09-22T15:00:00Z',
+    time: 'Stratum 1',
+    cpu: 12.5,
+    temp: 45.2,
+    ram: 34.1,
     raw: {
-      network: {
-        ip: '192.168.1.20',
-        online: 'yes',
-      },
-      ntp: {
-        time: '2026-09-22T15:00:00Z',
-      },
+      ntp: '192.168.1.20',
+      time: 'Stratum 1',
+      net: 'Online (eth0)',
+      cpu: '12.5%',
+      temp: '45.2°C',
+      ram: '34.1%',
     },
   });
+});
+
+test('parsePlainTextPayload maps "Down" IP to null', () => {
+  const status = parsePlainTextPayload(
+    'NTP: Down\nTime: Stopped\nNet: Offline (None)\nCPU: 0.0%\nTemp: 40.0°C\nRAM: 20.0%',
+  );
+
+  assert.equal(status.ipAddress, null);
+  assert.equal(status.internetConnected, false);
 });
 
 test('isValidCidrAddress accepts valid IPv4 CIDR strings', () => {
@@ -73,16 +78,8 @@ test('GET /api/status returns normalised exporter data', async (t) => {
     exporterUrl: 'http://exporter.local/status',
     fetchImpl: async () => ({
       ok: true,
-      async json() {
-        return {
-          network: {
-            ip: '172.16.0.3',
-            online: false,
-          },
-          ntp: {
-            time: '2026-09-22T15:12:00Z',
-          },
-        };
+      async text() {
+        return 'NTP: 172.16.0.3\nTime: Stratum 2\nNet: Offline (None)\nCPU: 5.0%\nTemp: 42.0°C\nRAM: 55.0%';
       },
     }),
   });
@@ -96,7 +93,10 @@ test('GET /api/status returns normalised exporter data', async (t) => {
   assert.equal(response.status, 200);
   assert.equal(body.ipAddress, '172.16.0.3');
   assert.equal(body.internetConnected, false);
-  assert.equal(body.time, '2026-09-22T15:12:00Z');
+  assert.equal(body.time, 'Stratum 2');
+  assert.equal(body.cpu, 5.0);
+  assert.equal(body.temp, 42.0);
+  assert.equal(body.ram, 55.0);
 });
 
 test('GET /api/status returns 500 when the exporter URL is not configured', async (t) => {
@@ -139,8 +139,8 @@ test('POST /api/network validates the request body and calls the applier', async
     exporterUrl: 'http://exporter.local/status',
     fetchImpl: async () => ({
       ok: true,
-      async json() {
-        return {};
+      async text() {
+        return 'NTP: 192.168.50.15\nTime: Stopped\nNet: Offline (None)\nCPU: 0.0%\nTemp: 40.0°C\nRAM: 20.0%';
       },
     }),
     networkApplier: async (payload) => {
@@ -175,8 +175,8 @@ test('POST /api/network rejects an invalid address', async (t) => {
     exporterUrl: 'http://exporter.local/status',
     fetchImpl: async () => ({
       ok: true,
-      async json() {
-        return {};
+      async text() {
+        return 'NTP: 192.168.50.15\nTime: Stopped\nNet: Offline (None)\nCPU: 0.0%\nTemp: 40.0°C\nRAM: 20.0%';
       },
     }),
   });

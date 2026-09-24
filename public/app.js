@@ -1,6 +1,9 @@
 const ipAddressElement = document.getElementById('ipAddress');
 const internetConnectedElement = document.getElementById('internetConnected');
 const timeValueElement = document.getElementById('timeValue');
+const cpuValueElement = document.getElementById('cpuValue');
+const tempValueElement = document.getElementById('tempValue');
+const ramValueElement = document.getElementById('ramValue');
 const rawPayloadElement = document.getElementById('rawPayload');
 const statusMessageElement = document.getElementById('statusMessage');
 const formMessageElement = document.getElementById('formMessage');
@@ -18,6 +21,9 @@ function renderStatus(status) {
   internetConnectedElement.textContent =
     status.internetConnected == null ? 'Unavailable' : status.internetConnected ? 'Connected' : 'Offline';
   timeValueElement.textContent = status.time ?? 'Unavailable';
+  cpuValueElement.textContent = status.cpu != null ? `${status.cpu}%` : 'Unavailable';
+  tempValueElement.textContent = status.temp != null ? `${status.temp} °C` : 'Unavailable';
+  ramValueElement.textContent = status.ram != null ? `${status.ram}%` : 'Unavailable';
   rawPayloadElement.textContent = JSON.stringify(status.raw ?? {}, null, 2);
 }
 
