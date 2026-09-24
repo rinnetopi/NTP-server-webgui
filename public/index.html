@@ -27,15 +27,27 @@
             <strong id="internetConnected">—</strong>
           </article>
           <article class="status-card">
-            <span class="label">Time</span>
+            <span class="label">NTP / Time</span>
             <strong id="timeValue">—</strong>
+          </article>
+          <article class="status-card">
+            <span class="label">CPU</span>
+            <strong id="cpuValue">—</strong>
+          </article>
+          <article class="status-card">
+            <span class="label">Temperature</span>
+            <strong id="tempValue">—</strong>
+          </article>
+          <article class="status-card">
+            <span class="label">RAM</span>
+            <strong id="ramValue">—</strong>
           </article>
         </div>
 
         <p id="statusMessage" class="message" role="status"></p>
 
         <details class="raw-json">
-          <summary>Raw exporter JSON</summary>
+          <summary>Raw exporter data</summary>
           <pre id="rawPayload">{}</pre>
         </details>
       </section>

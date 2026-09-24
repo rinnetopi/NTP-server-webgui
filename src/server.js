@@ -6,26 +6,6 @@ const { execFile } = require('child_process');
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 5000;
 
-function firstDefined(payload, paths) {
-  for (const pathParts of paths) {
-    let current = payload;
-
-    for (const part of pathParts) {
-      if (current == null || typeof current !== 'object' || !(part in current)) {
-        current = undefined;
-        break;
-      }
-
-      current = current[part];
-    }
-
-    if (current !== undefined && current !== null && current !== '') {
-      return current;
-    }
-  }
-
-  return null;
-}
 
 function toBoolean(value) {
   if (typeof value === 'boolean') {
@@ -51,53 +31,57 @@ function toBoolean(value) {
   return null;
 }
 
-function normalizeExporterPayload(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new Error('Exporter response must be a JSON object.');
+// Parse the plain-text format emitted by the Python exporter:
+//   NTP: <ip>
+//   Time: <chrony-status>
+//   Net: Online (<iface>) | Offline (<iface>)
+//   CPU: <number>%
+//   Temp: <number>°C
+//   RAM: <number>%
+function parsePlainTextPayload(text) {
+  if (typeof text !== 'string') {
+    throw new Error('Exporter response must be plain text.');
   }
 
-  const ipAddress = firstDefined(payload, [
-    ['ipAddress'],
-    ['ip_address'],
-    ['ip'],
-    ['network', 'ipAddress'],
-    ['network', 'ip_address'],
-    ['network', 'ip'],
-    ['eth1', 'ipAddress'],
-    ['eth1', 'ip_address'],
-    ['eth1', 'ip'],
-  ]);
+  const fields = {};
+  for (const line of text.split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon === -1) continue;
+    const key = line.slice(0, colon).trim().toLowerCase();
+    const value = line.slice(colon + 1).trim();
+    fields[key] = value;
+  }
 
-  const internetValue = firstDefined(payload, [
-    ['internetConnected'],
-    ['internet_connected'],
-    ['isConnectedToInternet'],
-    ['is_connected_to_internet'],
-    ['connectedToInternet'],
-    ['connected_to_internet'],
-    ['internet'],
-    ['online'],
-    ['network', 'internetConnected'],
-    ['network', 'online'],
-    ['eth1', 'internetConnected'],
-    ['eth1', 'online'],
-  ]);
+  // NTP: <ip>  (may be "Down")
+  const ipAddress = fields['ntp'] || null;
 
-  const time = firstDefined(payload, [
-    ['time'],
-    ['currentTime'],
-    ['current_time'],
-    ['ntpTime'],
-    ['ntp_time'],
-    ['status', 'time'],
-    ['ntp', 'time'],
-  ]);
+  // Time: Stratum 1 | Active | Stopped
+  const time = fields['time'] || null;
+
+  // Net: Online (eth0) | Offline (None)
+  const netValue = fields['net'] || '';
+  const internetConnected = toBoolean(netValue.split(' ')[0]);
+
+  // CPU: 12.3%
+  const cpuRaw = fields['cpu'] || null;
+  const cpu = cpuRaw != null ? parseFloat(cpuRaw) : null;
+
+  // Temp: 45.2°C
+  const tempRaw = fields['temp'] || null;
+  const temp = tempRaw != null ? parseFloat(tempRaw) : null;
+
+  // RAM: 34.1%
+  const ramRaw = fields['ram'] || null;
+  const ram = ramRaw != null ? parseFloat(ramRaw) : null;
 
   return {
-    ipAddress,
-    internetConnected: toBoolean(internetValue),
-    time: time == null ? null : String(time),
-    raw: payload,
+    ipAddress: ipAddress === 'Down' ? null : ipAddress,
+    internetConnected,
+    time,
+    cpu,
+    temp,
+    ram,
+    raw: fields,
   };
 }
 
@@ -192,8 +176,8 @@ function createApp(options = {}) {
         return;
       }
 
-      const payload = await exporterResponse.json();
-      const status = normalizeExporterPayload(payload);
+      const payload = await exporterResponse.text();
+      const status = parsePlainTextPayload(payload);
 
       response.json({
         networkInterface,
@@ -254,7 +238,7 @@ module.exports = {
   createApp,
   isValidCidrAddress,
   isValidInterfaceName,
-  normalizeExporterPayload,
+  parsePlainTextPayload,
   startServer,
 };
 
