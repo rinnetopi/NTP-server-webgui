@@ -15,8 +15,8 @@ CapabilityBoundingSet=CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_ADMIN
 
 # Environment – edit these to match your setup
-Environment=PORT=8080
-Environment=NTP_EXPORTER_URL=http://localhost:9559/metrics/json
+Environment=PORT=3000
+Environment=NTP_EXPORTER_URL=http://localhost:8080
 Environment=NETWORK_INTERFACE=eth1
 
 [Install]

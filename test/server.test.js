@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApp, isValidCidrAddress, parsePlainTextPayload } = require('../src/server');
+const { createApp, isValidCidrAddress, parseCidrAddress, parsePlainTextPayload } = require('../src/server');
 
 async function startTestServer(app) {
   return await new Promise((resolve) => {
@@ -44,6 +44,48 @@ test('parsePlainTextPayload maps "Down" IP to null', () => {
 
   assert.equal(status.ipAddress, null);
   assert.equal(status.internetConnected, false);
+});
+
+test('parseCidrAddress computes the correct chrony allow and broadcast values', () => {
+  const network = parseCidrAddress('192.168.1.169/24');
+
+  assert.deepEqual(network, {
+    network: '192.168.1.0/24',
+    broadcast: '192.168.1.255',
+  });
+});
+
+test('GET /api/status accepts JSON exporter payloads and normalises them', async (t) => {
+  const app = createApp({
+    exporterUrl: 'http://exporter.local/status',
+    fetchImpl: async () => ({
+      ok: true,
+      async text() {
+        return JSON.stringify({
+          ipAddress: '192.168.1.10',
+          internetConnected: true,
+          time: 'Stratum 2',
+          cpu: '45.5%',
+          temp: '56.0°C',
+          ram: '67.8%',
+        });
+      },
+    }),
+  });
+
+  const { server, url } = await startTestServer(app);
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/api/status`);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ipAddress, '192.168.1.10');
+  assert.equal(body.internetConnected, true);
+  assert.equal(body.time, 'Stratum 2');
+  assert.equal(body.cpu, 45.5);
+  assert.equal(body.temp, 56.0);
+  assert.equal(body.ram, 67.8);
 });
 
 test('isValidCidrAddress accepts valid IPv4 CIDR strings', () => {

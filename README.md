@@ -14,17 +14,17 @@ Set these environment variables before starting the server:
 
 | Variable | Default | Description |
 |---|---|---|
-| `NTP_EXPORTER_URL` | *(required)* | URL of your local JSON exporter, e.g. `http://localhost:9559/metrics/json` |
+| `NTP_EXPORTER_URL` | *(required)* | URL of your local exporter, e.g. `http://localhost:8080` |
 | `PORT` | `3000` | HTTP port the web UI listens on |
 | `NETWORK_INTERFACE` | `eth1` | Network adapter to manage |
 
-The exporter endpoint must return a JSON object. The app looks for common field names such as `ipAddress`, `internetConnected`, and `time`.
+The exporter may return either plain text or JSON. The app normalizes both to the same dashboard fields. The Python exporter used by this project emits plain text lines such as `NTP: ...`, `Time: ...`, `Net: ...`, `CPU: ...`, `Temp: ...`, and `RAM: ...`.
 
 ## Run locally
 
 ```bash
 npm install
-NTP_EXPORTER_URL=http://127.0.0.1:9090/status npm start
+NTP_EXPORTER_URL=http://127.0.0.1:8080 npm start
 ```
 
 Then open `http://127.0.0.1:3000`.

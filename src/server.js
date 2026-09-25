@@ -40,7 +40,7 @@ function toBoolean(value) {
 //   RAM: <number>%
 function parsePlainTextPayload(text) {
   if (typeof text !== 'string') {
-    throw new Error('Exporter response must be plain text.');
+    throw new Error('Exporter response must be plain text or JSON.');
   }
 
   const fields = {};
@@ -85,6 +85,70 @@ function parsePlainTextPayload(text) {
   };
 }
 
+function toNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const stringValue = String(value).trim();
+  if (stringValue === '') {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(stringValue.replace(/[%°C\s]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseJsonPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Exporter response must be valid JSON or plain text.');
+  }
+
+  const netValue = payload.net ?? payload.internet ?? payload.internetConnected ?? '';
+  const internetConnected =
+    payload.internetConnected != null
+      ? toBoolean(payload.internetConnected)
+      : typeof netValue === 'string'
+        ? toBoolean(netValue.split(' ')[0])
+        : null;
+
+  return {
+    ipAddress: payload.ipAddress ?? payload.ntp ?? null,
+    internetConnected,
+    time: payload.time ?? null,
+    cpu: toNumber(payload.cpu),
+    temp: toNumber(payload.temp),
+    ram: toNumber(payload.ram),
+    raw: payload,
+  };
+}
+
+function parseExporterPayload(payload) {
+  if (payload && typeof payload === 'object') {
+    return parseJsonPayload(payload);
+  }
+
+  if (typeof payload !== 'string') {
+    throw new Error('Exporter response must be valid JSON or plain text.');
+  }
+
+  const trimmed = payload.trim();
+  if (!trimmed) {
+    throw new Error('Exporter response is empty.');
+  }
+
+  try {
+    const jsonPayload = JSON.parse(trimmed);
+    if (jsonPayload && typeof jsonPayload === 'object') {
+      return parseJsonPayload(jsonPayload);
+    }
+  } catch (_error) {
+    // Fall through to plain-text parsing below.
+  }
+
+  return parsePlainTextPayload(trimmed);
+}
+
 function isValidCidrAddress(value) {
   if (typeof value !== 'string') {
     return false;
@@ -104,6 +168,60 @@ function isValidCidrAddress(value) {
   });
 }
 
+function parseCidrAddress(cidrAddress) {
+  const [ip, prefixText] = String(cidrAddress).trim().split('/');
+  const prefix = Number(prefixText);
+
+  if (!isValidCidrAddress(cidrAddress) || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+    throw new Error('Invalid CIDR address.');
+  }
+
+  const octets = ip.split('.').map((octet) => Number(octet));
+  const ipValue = octets.reduce((value, octet) => ((value << 8) | octet) >>> 0, 0);
+  const mask = prefix === 0 ? 0 : ((0xffffffff << (32 - prefix)) >>> 0);
+  const networkValue = (ipValue & mask) >>> 0;
+  const broadcastValue = networkValue | (~mask >>> 0);
+
+  const toIpv4 = (value) =>
+    [24, 16, 8, 0].map((shift) => ((value >>> shift) & 0xff)).join('.');
+
+  return {
+    network: `${toIpv4(networkValue)}/${prefix}`,
+    broadcast: toIpv4(broadcastValue),
+  };
+}
+
+async function syncChronyConfig({ interfaceName, cidrAddress }) {
+  const { network, broadcast } = parseCidrAddress(cidrAddress);
+  const chronyConfigPath = '/etc/chrony/conf.d/ntp-webgui.conf';
+  const config = [
+    '# Managed by ntp-webgui',
+    `allow ${network}`,
+    `broadcast 1024 ${broadcast}`,
+    '',
+  ].join('\n');
+
+  await execFileAsync('sh', ['-c', `mkdir -p /etc/chrony/conf.d && cat > "${chronyConfigPath}" <<'EOF'\n${config}EOF`]);
+
+  try {
+    await execFileAsync('systemctl', ['restart', 'chrony']);
+  } catch (error) {
+    try {
+      await execFileAsync('systemctl', ['restart', 'chronyd']);
+    } catch (_chronyError) {
+      throw error;
+    }
+  }
+
+  return {
+    interfaceName,
+    cidrAddress,
+    chronyConfigPath,
+    network,
+    broadcast,
+  };
+}
+
 async function applyNetworkAddress({ interfaceName, cidrAddress }) {
   await execFileAsync('ip', ['addr', 'replace', cidrAddress, 'dev', interfaceName]);
 
@@ -119,6 +237,8 @@ async function applyNetworkAddress({ interfaceName, cidrAddress }) {
     }
     // interface not present yet – address is still recorded for when it comes up
   }
+
+  await syncChronyConfig({ interfaceName, cidrAddress });
 }
 
 function isValidInterfaceName(value) {
@@ -163,9 +283,6 @@ function createApp(options = {}) {
 
     try {
       const exporterResponse = await fetchImpl(exporterUrl, {
-        headers: {
-          accept: 'application/json',
-        },
         signal: AbortSignal.timeout(timeoutMs),
       });
 
@@ -177,7 +294,7 @@ function createApp(options = {}) {
       }
 
       const payload = await exporterResponse.text();
-      const status = parsePlainTextPayload(payload);
+      const status = parseExporterPayload(payload);
 
       response.json({
         networkInterface,
@@ -238,8 +355,10 @@ module.exports = {
   createApp,
   isValidCidrAddress,
   isValidInterfaceName,
+  parseCidrAddress,
   parsePlainTextPayload,
   startServer,
+  syncChronyConfig,
 };
 
 if (require.main === module) {
