@@ -1,73 +1,176 @@
-# NTP-server-webgui
+# NTP Server Web GUI (Flask)
 
-Simple web UI for a Raspberry Pi NTP server.
+Web UI and API for Raspberry Pi NTP/network administration using Flask and `nmcli`.
+
+Current release version: **2.0.0**
+
+For full clean-install setup on Raspberry Pi OS Trixie (users, chrony, service, proxy, DNS, and LAN-only access), see:
+
+- [`docs/IMPLEMENTATION-GUIDE-RPI-TRIXIE.md`](docs/IMPLEMENTATION-GUIDE-RPI-TRIXIE.md)
 
 ## Features
 
-- Shows the exporter IP address, internet status, and current time
-- Lets you refresh the latest exporter values from the browser
-- Lets you update the `eth1` address with an IPv4 CIDR value such as `192.168.1.50/24` — even when the interface is currently down
+- Live system telemetry endpoint (`/api/system/status`) with temperature, load, uptime, and chrony state.
+- WAN (`eth0`) configuration endpoint for DHCP or static mode.
+- LAN (`eth1`) isolated subnet configuration endpoint.
+- Wi-Fi scan and connect endpoints (`/api/network/wifi/scan`, `/api/network/wifi`).
+- Wi-Fi DHCP/static handling with SSID connection + connection profile update.
+- Service controls for chrony restart/reload and system reboot.
 
-## Configuration
+## API routes
 
-Set these environment variables before starting the server:
-
-| Variable | Default | Description |
+| Route | Method | Purpose |
 |---|---|---|
-| `NTP_EXPORTER_URL` | *(required)* | URL of your local exporter, e.g. `http://localhost:8080` |
-| `PORT` | `3000` | HTTP port the web UI listens on |
-| `NETWORK_INTERFACE` | `eth1` | Network adapter to manage |
-
-The exporter may return either plain text or JSON. The app normalizes both to the same dashboard fields. The Python exporter used by this project emits plain text lines such as `NTP: ...`, `Time: ...`, `Net: ...`, `CPU: ...`, `Temp: ...`, and `RAM: ...`.
+| `/api/system/status` | `GET` | Return telemetry and chrony status |
+| `/api/network/wan` | `POST` | Set WAN DHCP or static config |
+| `/api/network/lan` | `POST` | Set LAN static config |
+| `/api/network/wifi/scan` | `GET` | Scan nearby Wi-Fi networks |
+| `/api/network/wifi` | `POST` | Connect to Wi-Fi |
+| `/api/service/ntp` | `POST` | Restart or reload chrony |
+| `/api/service/reboot` | `POST` | Reboot the device |
 
 ## Run locally
 
 ```bash
-npm install
-NTP_EXPORTER_URL=http://127.0.0.1:8080 npm start
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 app.py
 ```
 
-Then open `http://127.0.0.1:3000`.
+Open `http://127.0.0.1:5000`.
 
-## Run as a systemd service (auto-start at boot)
+## Sandbox testbench (safe, no system changes)
 
-1. Install the application:
+Enable sandbox mode so API calls do not execute real `nmcli`, `systemctl`, or `reboot` commands:
+
+```bash
+export SANDBOX_MODE=true
+python3 app.py
+```
+
+Then run the API/UI testbench:
+
+```bash
+python3 -m unittest discover -s tests -p "test_*.py"
+```
+
+Sandbox mode returns deterministic mock command responses for Wi-Fi scans, chrony tracking, and network/service operations, so you can validate frontend/backend integration safely on non-Pi machines.
+
+## Raspberry Pi Trixie deployment (your profile)
+
+This repo now defaults to:
+
+- WAN: `eth0`
+- Wi-Fi: `wlan0`
+- LAN: `eth1`
+- NTP service: `chrony`
+- Flask bind: `127.0.0.1:5000` (for reverse proxy)
+
+### One-command full bootstrap (clean Pi)
+
+```bash
+sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
+  REPO_BRANCH=main \
+  WAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 LAN_INTERFACE=eth1 \
+  LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
+  bash scripts/bootstrap_rpi_trixie.sh
+```
+
+This script will:
+
+- install missing system dependencies
+- clone/update repo into `/opt/ntp-server-webgui-src`
+- create `NTP` user + sudo rules
+- deploy app/service to `/opt/ntp-server-webgui`
+- configure nginx + dnsmasq for `ntpserver.ct`
+- enforce nftables isolation (NTP-only forwarding between interfaces)
+
+### 1. Create service user and privileged command rights
+
+```bash
+sudo bash scripts/setup_ntp_user.sh
+```
+
+This creates user `NTP` (no local password login) and grants passwordless sudo only for:
+
+- `nmcli`
+- `systemctl restart chrony`
+- `systemctl reload chrony`
+- `reboot`
+
+### 2. Deploy app and systemd service
+
+```bash
+sudo bash scripts/setup_ntp_service.sh
+```
+
+This installs into `/opt/ntp-server-webgui`, creates a venv, installs dependencies, and starts `ntp-webgui.service`.
+
+### 3. Enable proxy + local DNS for `ntpserver.ct` on closed LAN (`eth1`)
+
+```bash
+sudo LAN_INTERFACE=eth1 LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct bash scripts/setup_proxy_dns.sh
+```
+
+What this does:
+
+- Nginx listens only on `10.0.0.1:80` and proxies to `127.0.0.1:5000`.
+- dnsmasq resolves `ntpserver.ct` to `10.0.0.1` on `eth1`.
+
+Critical requirement for clients on the closed network:
+
+- Their DNS server must be set to `10.0.0.1` (the Pi on `eth1`), otherwise `ntpserver.ct` will not resolve.
+
+### 4. Enforce network isolation firewall (NTP-only forwarding)
+
+```bash
+sudo WAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 LAN_INTERFACE=eth1 bash scripts/setup_firewall_isolation.sh
+```
+
+This blocks forwarding between WAN/Wi-Fi and LAN by default and permits only UDP/123 (NTP) across interfaces.
+
+## Run as a systemd service
+
+1. Install app files:
 
    ```bash
    sudo cp -r . /opt/ntp-server-webgui
-   cd /opt/ntp-server-webgui && sudo npm install --omit=dev
    ```
 
-2. Copy and edit the service unit:
+2. Install Python dependencies:
+
+   ```bash
+   cd /opt/ntp-server-webgui
+   sudo python3 -m pip install -r requirements.txt
+   ```
+
+3. Install and enable service:
 
    ```bash
    sudo cp deploy/ntp-webgui.service /etc/systemd/system/
-   sudo nano /etc/systemd/system/ntp-webgui.service
-   # Set NTP_EXPORTER_URL, PORT, and NETWORK_INTERFACE to match your setup
-   ```
-
-3. Enable and start the service:
-
-   ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now ntp-webgui
    ```
 
-4. Check the status:
+4. Inspect service logs:
 
    ```bash
    sudo systemctl status ntp-webgui
+   journalctl -u ntp-webgui -f
    ```
 
-The service unit file is at [`deploy/ntp-webgui.service`](deploy/ntp-webgui.service).
+## Security and permissions notes
 
-## Notes
+- This app calls privileged commands (`nmcli`, `systemctl`, `reboot`) via `sudo`.
+- The service unit includes Linux capabilities for network configuration and reboot control.
+- Use least privilege and restrict deployment to trusted administrators.
 
-- Updating the network address uses the `ip` command, so the process must have permission to manage the selected network interface (e.g. run as root or grant `CAP_NET_ADMIN`).
-- The address update sets the address in the running kernel. If the interface is down at the time, the change still succeeds and takes effect when the interface comes up. For persistence across reboots, update `/etc/network/interfaces` or your system's network configuration.
+## Deployment configuration values
 
-## Test
-
-```bash
-npm test
-```
+- `WAN_CONNECTION_NAME` (default: `eth0`)
+- `LAN_CONNECTION_NAME` (default: `eth1`)
+- `WIFI_CONNECTION_NAME` (default: `wlan0`)
+- `NTP_SERVICE_NAMES` (default: `chrony`)
+- Presence of `chronyc`, `nmcli`, and `systemctl` on target OS
+- `sudo` permissions for the app service user (network changes, chrony control, reboot)

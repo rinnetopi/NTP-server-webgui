@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi NTP Server Network Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        .tactile-card {
+            background: linear-gradient(145deg, #1e1e1e, #161616);
+            box-shadow: 6px 6px 16px #0b0b0b, -6px -6px 16px #1b1b1b;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 1.25rem;
+        }
+
+        .tactile-input {
+            background: #151515;
+            box-shadow: inset 3px 3px 6px #0d0d0d, inset -3px -3px 6px #1d1d1d;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .tactile-input:focus {
+            outline: none;
+            border-color: #1565c0;
+            box-shadow: inset 3px 3px 6px #0d0d0d, inset -3px -3px 6px #1d1d1d, 0 0 10px rgba(21, 101, 192, 0.3);
+        }
+
+        .tactile-btn-primary {
+            background: linear-gradient(145deg, #1565c0, #0d47a1);
+            box-shadow: 4px 4px 12px #0a0a0a, -2px -2px 8px rgba(21, 101, 192, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.15s ease;
+        }
+
+        .tactile-btn-primary:active {
+            box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.6), inset -2px -2px 5px rgba(255, 255, 255, 0.15);
+            transform: translateY(2px);
+        }
+
+        .tactile-btn-secondary {
+            background: linear-gradient(145deg, #222222, #181818);
+            box-shadow: 4px 4px 10px #0b0b0b, -4px -4px 10px #212121;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            transition: all 0.15s ease;
+        }
+
+        .tactile-btn-secondary:active {
+            box-shadow: inset 2px 2px 5px #0a0a0a, inset -2px -2px 5px #202020;
+            transform: translateY(2px);
+        }
+
+        .status-badge-online {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+        }
+
+        .pulse-dot {
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .conditional-section {
+            transition: all 0.3s ease-in-out;
+            max-height: 500px;
+            overflow: hidden;
+            opacity: 1;
+        }
+
+        .conditional-section.hidden-section {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            pointer-events: none;
+            border: none !important;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121212;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #252525;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12 pt-6 px-4 sm:px-6 lg:px-8 flex justify-center items-start">
+    <div class="w-full max-w-3xl space-y-6">
+        <header class="tactile-card p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1565c0] to-[#0d47a1] flex items-center justify-center text-white shadow-lg text-xl font-bold border border-white/10">
+                    <i class="fa-solid font-mono text-2xl fa-clock"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white tracking-wide">NTP Server Control</h1>
+                    <p class="text-xs text-gray-400 flex flex-wrap items-center gap-2 mt-0.5">
+                        <span>Raspberry Pi 3B+</span> •
+                        <span id="uptime-text">Uptime: Loading...</span> •
+                        <span class="text-blue-400 font-mono"><i class="fa-solid fa-microchip text-[10px] mr-1"></i><span id="cpu-load">--</span></span> •
+                        <span class="text-amber-400 font-mono"><i class="fa-solid fa-temperature-half text-[10px] mr-1"></i><span id="cpu-temp">--°C</span></span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3 status-badge-online px-4 py-2 rounded-full">
+                <span class="w-3 h-3 bg-emerald-500 rounded-full pulse-dot"></span>
+                <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider" id="server-status-label">Chrony Active</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="tactile-card p-4 flex items-center space-x-3">
+                <div class="p-3 bg-neutral-800/80 rounded-xl text-blue-400">
+                    <i class="fa-solid fa-globe text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-400 font-medium">WAN Source (eth0)</p>
+                    <p class="text-sm font-bold text-white tracking-wide truncate max-w-[150px]" id="disp-wan">DHCP (Active)</p>
+                </div>
+            </div>
+            <div class="tactile-card p-4 flex items-center space-x-3">
+                <div class="p-3 bg-neutral-800/80 rounded-xl text-blue-400">
+                    <i class="fa-solid fa-network-wired text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-400 font-medium">LAN Server (eth1)</p>
+                    <p class="text-sm font-bold text-white tracking-wide" id="disp-lan">10.0.0.1 (Static)</p>
+                </div>
+            </div>
+            <div class="tactile-card p-4 flex items-center space-x-3">
+                <div class="p-3 bg-neutral-800/80 rounded-xl text-blue-400">
+                    <i class="fa-solid fa-satellite-dish text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-400 font-medium">Chrony Stratum</p>
+                    <p class="text-sm font-bold text-white tracking-wide" id="disp-stratum">Stratum 2</p>
+                </div>
+            </div>
+        </div>
+
+        <section class="tactile-card p-6 space-y-5">
+            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-globe text-blue-400 text-lg"></i>
+                    <div>
+                        <h2 class="text-base font-semibold text-white">WAN Network Interface (eth0)</h2>
+                        <p class="text-xs text-gray-400">Internet & Upstream NTP Sync</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2.5">
+                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200" id="wan-dhcp-lbl" style="color: #60a5fa;">DHCP</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="wan-dhcp-toggle" class="sr-only peer" onchange="toggleWanMode(this.checked)">
+                        <div class="w-11 h-6 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1565c0] shadow-inner"></div>
+                    </label>
+                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200 text-gray-500" id="wan-static-lbl">Static</span>
+                </div>
+            </div>
+            <form id="wan-form" onsubmit="saveWanSettings(event)" class="space-y-4">
+                <div id="wan-static-fields" class="conditional-section hidden-section space-y-4 pt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Static IPv4 Address</label>
+                            <input type="text" id="wan-input-ip" value="192.168.1.150" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Subnet Mask</label>
+                            <input type="text" id="wan-input-subnet" value="255.255.255.0" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-2 flex justify-end">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Apply WAN Settings</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="tactile-card p-6 space-y-5">
+            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-wifi text-blue-400 text-lg"></i>
+                    <div>
+                        <h2 class="text-base font-semibold text-white">Wireless Configuration (wlan0)</h2>
+                        <p class="text-xs text-gray-400">Alternative Upstream Internet</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2.5">
+                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200" id="wifi-dhcp-lbl" style="color: #60a5fa;">DHCP</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="wifi-dhcp-toggle" class="sr-only peer" onchange="toggleWifiMode(this.checked)">
+                        <div class="w-11 h-6 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1565c0] shadow-inner"></div>
+                    </label>
+                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200 text-gray-500" id="wifi-static-lbl">Static</span>
+                </div>
+            </div>
+            <form id="wifi-form" onsubmit="saveWifiSettings(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5 flex items-center justify-between">
+                        <span>Wi-Fi Network (SSID)</span>
+                        <button type="button" onclick="scanWifiNetworks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-normal">
+                            <i class="fa-solid fa-arrows-rotate" id="scan-wifi-icon"></i> Scan Networks
+                        </button>
+                    </label>
+                    <div class="relative">
+                        <select id="wifi-ssid-select" onchange="onWifiSelectChange(this.value)" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input appearance-none pr-10 cursor-pointer">
+                            <option value="" disabled selected>Select scanned network...</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down text-gray-400 absolute right-4 top-4 text-xs pointer-events-none"></i>
+                    </div>
+                </div>
+                <div id="custom-ssid-box" class="hidden-section conditional-section">
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">Custom SSID Name</label>
+                    <input type="text" id="wifi-input-custom-ssid" placeholder="Enter network name..." class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">WPA2/WPA3 Password</label>
+                    <div class="relative">
+                        <input type="password" id="input-wifi-pass" placeholder="Enter wireless password" required class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input pr-10">
+                        <button type="button" onclick="togglePasswordVisibility('input-wifi-pass', 'pass-icon')" class="absolute right-3.5 top-3.5 text-gray-400 hover:text-white transition">
+                            <i class="fa-solid fa-eye text-xs" id="pass-icon"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="wifi-static-fields" class="conditional-section hidden-section space-y-4 pt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Static IPv4 Address</label>
+                            <input type="text" id="wifi-input-ip" value="192.168.1.180" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Subnet Mask</label>
+                            <input type="text" id="wifi-input-subnet" value="255.255.255.0" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-2 flex justify-end">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-plug text-xs"></i>
+                        <span>Connect & Save Wi-Fi</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="tactile-card p-6 space-y-5">
+            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-network-wired text-blue-400 text-lg"></i>
+                    <div>
+                        <h2 class="text-base font-semibold text-white">LAN Server Interface (eth1)</h2>
+                        <p class="text-xs text-gray-400">Closed Local Network (No Internet / No Gateway / No DNS)</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2.5">
+                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200 text-gray-500" id="lan-dhcp-lbl">DHCP</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="lan-dhcp-toggle" class="sr-only peer" checked onchange="toggleLanMode(this.checked)">
+                        <div class="w-11 h-6 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1565c0] shadow-inner"></div>
+                    </label>
+                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200" id="lan-static-lbl" style="color: #60a5fa;">Static</span>
+                </div>
+            </div>
+            <form id="lan-form" onsubmit="saveLanSettings(event)" class="space-y-4">
+                <div id="lan-static-fields" class="conditional-section space-y-4 pt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">LAN Server Static IPv4</label>
+                            <input type="text" id="lan-input-ip" value="10.0.0.1" required class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Subnet Mask</label>
+                            <input type="text" id="lan-input-subnet" value="255.255.255.0" required class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-2 flex justify-end">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Apply LAN Settings</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="tactile-card p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+                <h3 class="text-sm font-bold text-white">NTP Service Daemon Control</h3>
+                <p class="text-xs text-gray-400">Restart chrony NTP server or reboot Raspberry Pi.</p>
+            </div>
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+                <button onclick="triggerServiceAction('restart')" class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-semibold text-blue-400 tactile-btn-secondary flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Restart Chrony</span>
+                </button>
+                <button onclick="triggerServiceAction('reboot')" class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-400 tactile-btn-secondary flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-arrows-spin"></i>
+                    <span>Reboot Pi</span>
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none z-50">
+        <div class="tactile-card border border-blue-500/30 px-5 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 bg-[#181818]">
+            <div id="toast-icon-bg" class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                <i id="toast-icon" class="fa-solid fa-check text-sm"></i>
+            </div>
+            <div>
+                <h4 id="toast-title" class="text-xs font-bold text-white">Success</h4>
+                <p id="toast-msg" class="text-xs text-gray-400">Settings applied successfully.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchSystemStatus() {
+            try {
+                const res = await fetch('/api/system/status');
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('uptime-text').innerText = `Uptime: ${data.uptime}`;
+                    document.getElementById('cpu-load').innerText = data.load.join(', ');
+                    document.getElementById('cpu-temp').innerText = `${data.temperature}°C`;
+                    document.getElementById('disp-stratum').innerText = `Stratum ${data.stratum}`;
+                    document.getElementById('server-status-label').innerText = data.chrony_active ? 'Chrony Active' : 'Chrony Inactive';
+                }
+            } catch (error) {
+                console.error("Failed to fetch system status:", error);
+            }
+        }
+        setInterval(fetchSystemStatus, 5000);
+        fetchSystemStatus();
+
+        function toggleWanMode(isStatic) {
+            const staticFields = document.getElementById('wan-static-fields');
+            const dhcpLbl = document.getElementById('wan-dhcp-lbl');
+            const staticLbl = document.getElementById('wan-static-lbl');
+            if (isStatic) {
+                staticFields.classList.remove('hidden-section');
+                dhcpLbl.style.color = '#6b7280';
+                staticLbl.style.color = '#60a5fa';
+            } else {
+                staticFields.classList.add('hidden-section');
+                dhcpLbl.style.color = '#60a5fa';
+                staticLbl.style.color = '#6b7280';
+            }
+        }
+
+        function toggleWifiMode(isStatic) {
+            const staticFields = document.getElementById('wifi-static-fields');
+            const dhcpLbl = document.getElementById('wifi-dhcp-lbl');
+            const staticLbl = document.getElementById('wifi-static-lbl');
+            if (isStatic) {
+                staticFields.classList.remove('hidden-section');
+                dhcpLbl.style.color = '#6b7280';
+                staticLbl.style.color = '#60a5fa';
+            } else {
+                staticFields.classList.add('hidden-section');
+                dhcpLbl.style.color = '#60a5fa';
+                staticLbl.style.color = '#6b7280';
+            }
+        }
+
+        function toggleLanMode(isStatic) {
+            const staticFields = document.getElementById('lan-static-fields');
+            const dhcpLbl = document.getElementById('lan-dhcp-lbl');
+            const staticLbl = document.getElementById('lan-static-lbl');
+            if (isStatic) {
+                staticFields.classList.remove('hidden-section');
+                dhcpLbl.style.color = '#6b7280';
+                staticLbl.style.color = '#60a5fa';
+            } else {
+                staticFields.classList.add('hidden-section');
+                dhcpLbl.style.color = '#60a5fa';
+                staticLbl.style.color = '#6b7280';
+            }
+        }
+
+        function onWifiSelectChange(value) {
+            const customBox = document.getElementById('custom-ssid-box');
+            if (value === 'custom') {
+                customBox.classList.remove('hidden-section');
+            } else {
+                customBox.classList.add('hidden-section');
+            }
+        }
+
+        async function scanWifiNetworks() {
+            const icon = document.getElementById('scan-wifi-icon');
+            icon.classList.add('fa-spin');
+            try {
+                const res = await fetch('/api/network/wifi/scan');
+                const data = await res.json();
+                if (data.success) {
+                    const select = document.getElementById('wifi-ssid-select');
+                    select.innerHTML = '<option value="" disabled selected>Select scanned network...</option>';
+                    data.networks.forEach(network => {
+                        const option = document.createElement('option');
+                        option.value = network.ssid;
+                        option.innerText = `${network.ssid} (Signal: ${network.signal}%)`;
+                        select.appendChild(option);
+                    });
+                    const customOption = document.createElement('option');
+                    customOption.value = 'custom';
+                    customOption.innerText = '-- Enter custom SSID manually --';
+                    select.appendChild(customOption);
+                    showToast("Wi-Fi Scan Complete", `Found ${data.networks.length} networks.`);
+                } else {
+                    showToast("Scan Error", data.error || "Could not scan wireless networks.", true);
+                }
+            } catch (error) {
+                showToast("Scan Error", "Could not scan wireless networks.", true);
+            } finally {
+                icon.classList.remove('fa-spin');
+            }
+        }
+
+        function togglePasswordVisibility(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (input.type === "password") {
+                input.type = "text";
+                icon.classList.remove("fa-eye");
+                icon.classList.add("fa-eye-slash");
+            } else {
+                input.type = "password";
+                icon.classList.remove("fa-eye-slash");
+                icon.classList.add("fa-eye");
+            }
+        }
+
+        async function saveWanSettings(event) {
+            event.preventDefault();
+            const isStatic = document.getElementById('wan-dhcp-toggle').checked;
+            const payload = {
+                mode: isStatic ? 'static' : 'dhcp',
+                ip: document.getElementById('wan-input-ip').value,
+                subnet: document.getElementById('wan-input-subnet').value
+            };
+            try {
+                const res = await fetch('/api/network/wan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('disp-wan').innerText = isStatic ? payload.ip : "DHCP (Active)";
+                    showToast("WAN Saved", "eth0 network configuration applied.");
+                } else {
+                    showToast("Error", data.error || "Failed to update WAN.", true);
+                }
+            } catch (error) {
+                showToast("Network Error", "Could not communicate with Flask backend.", true);
+            }
+        }
+
+        async function saveWifiSettings(event) {
+            event.preventDefault();
+            const select = document.getElementById('wifi-ssid-select');
+            const ssid = select.value === 'custom'
+                ? document.getElementById('wifi-input-custom-ssid').value
+                : select.value;
+            const payload = {
+                mode: document.getElementById('wifi-dhcp-toggle').checked ? 'static' : 'dhcp',
+                ssid: ssid,
+                password: document.getElementById('input-wifi-pass').value,
+                ip: document.getElementById('wifi-input-ip').value,
+                subnet: document.getElementById('wifi-input-subnet').value
+            };
+            try {
+                const res = await fetch('/api/network/wifi', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("Wi-Fi Connected", `Successfully connected to ${ssid}`);
+                } else {
+                    showToast("Wi-Fi Error", data.error || "Connection failed.", true);
+                }
+            } catch (error) {
+                showToast("Error", "Failed to connect to wireless.", true);
+            }
+        }
+
+        async function saveLanSettings(event) {
+            event.preventDefault();
+            const payload = {
+                ip: document.getElementById('lan-input-ip').value,
+                subnet: document.getElementById('lan-input-subnet').value
+            };
+            try {
+                const res = await fetch('/api/network/lan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('disp-lan').innerText = `${payload.ip} (Static)`;
+                    showToast("LAN Saved", "eth1 NTP server IP updated.");
+                } else {
+                    showToast("Error", data.error, true);
+                }
+            } catch (error) {
+                showToast("Error", "Failed to save LAN settings.", true);
+            }
+        }
+
+        async function triggerServiceAction(action) {
+            try {
+                const endpoint = action === 'reboot' ? '/api/service/reboot' : '/api/service/ntp';
+                const payload = action === 'reboot' ? {} : { action: 'restart' };
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(action === 'reboot' ? "Rebooting Pi" : "Chrony Restarted", data.message);
+                } else {
+                    showToast("Action Failed", data.error, true);
+                }
+            } catch (error) {
+                showToast("Error", "Service command failed.", true);
+            }
+        }
+
+        let toastTimeout;
+        function showToast(title, message, isAlert = false) {
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toast-title');
+            const toastMsg = document.getElementById('toast-msg');
+            const toastIconBg = document.getElementById('toast-icon-bg');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastTitle.innerText = title;
+            toastMsg.innerText = message;
+
+            if (isAlert) {
+                toastIconBg.className = "w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center";
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-sm";
+            } else {
+                toastIconBg.className = "w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center";
+                toastIcon.className = "fa-solid fa-check text-sm";
+            }
+
+            toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

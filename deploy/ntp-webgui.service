@@ -4,20 +4,25 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
+User=NTP
 WorkingDirectory=/opt/ntp-server-webgui
-ExecStart=/usr/bin/node src/server.js
+ExecStart=/opt/ntp-server-webgui/.venv/bin/python /opt/ntp-server-webgui/app.py
 Restart=on-failure
 RestartSec=5
 
-# Grant permission to manage network interfaces
-CapabilityBoundingSet=CAP_NET_ADMIN
-AmbientCapabilities=CAP_NET_ADMIN
+# Ensure Python output is immediately flushed to journal
+Environment=PYTHONUNBUFFERED=1
+Environment=SANDBOX_MODE=false
+Environment=APP_HOST=127.0.0.1
+Environment=APP_PORT=5000
+Environment=WAN_CONNECTION_NAME=eth0
+Environment=LAN_CONNECTION_NAME=eth1
+Environment=WIFI_CONNECTION_NAME=wlan0
+Environment=NTP_SERVICE_NAMES=chrony
 
-# Environment – edit these to match your setup
-Environment=PORT=3000
-Environment=NTP_EXPORTER_URL=http://localhost:8080
-Environment=NETWORK_INTERFACE=eth1
+# Grant permission to manage network interfaces and services
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_BOOT
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_BOOT
 
 [Install]
 WantedBy=multi-user.target
