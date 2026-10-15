@@ -8,7 +8,7 @@ It configures:
 - Flask web backend (`ntp-webgui`)
 - Dedicated service user (`NTP`) with scoped sudo rights
 - Reverse proxy (`nginx`)
-- Local DNS for `ntpserver.ct` on LAN (`dnsmasq`)
+- Local DNS for `ct.ntpserver.org` on LAN (`dnsmasq`)
 - Inter-interface firewall isolation (`nftables`)
 - Closed LAN access path via `eth1` only
 
@@ -23,9 +23,9 @@ It configures:
 
 Example LAN:
 
-- Pi `eth1`: `10.0.0.1/24`
-- DNS for clients: `10.0.0.1`
-- UI URL for clients: `http://ntpserver.ct`
+- Pi `eth1`: `10.12.0.1/16`
+- DNS for clients: `10.12.0.1`
+- UI URL for clients: `http://ct.ntpserver.org`
 
 ---
 
@@ -89,7 +89,7 @@ If you want automated end-to-end setup on a clean Pi, run:
 sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
   REPO_BRANCH=main \
   WIFI_INTERFACE=wlan0 \
-  LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
+  LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
@@ -105,7 +105,7 @@ Create a LAN server profile for chrony:
 ```bash
 sudo tee /etc/chrony/conf.d/ntp-webgui-lan.conf >/dev/null <<'EOF'
 # Allow LAN clients from eth1 subnet
-allow 10.0.0.0/24
+allow 10.12.0.0/16
 
 # Keep serving time even if upstream is temporarily unavailable
 local stratum 10
@@ -168,20 +168,20 @@ journalctl -u ntp-webgui -f
 
 ---
 
-## 7. Configure proxy + DNS for `ntpserver.ct`
+## 7. Configure proxy + DNS for `ct.ntpserver.org`
 
 From repo root:
 
 ```bash
-sudo LAN_INTERFACE=eth1 LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
+sudo LAN_INTERFACE=eth1 LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
   bash scripts/setup_proxy_dns.sh
 ```
 
 What it does:
 
-- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/24` before validating nginx config.
-- Nginx listens on `10.0.0.1:80` and proxies to `127.0.0.1:5000`
-- dnsmasq maps `ntpserver.ct -> 10.0.0.1` on `${LAN_INTERFACE}`
+- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/16` before validating nginx config.
+- Nginx listens on `10.12.0.1:80` and proxies to `127.0.0.1:5000`
+- dnsmasq maps `ct.ntpserver.org -> 10.12.0.1` on `${LAN_INTERFACE}`
 
 Validate:
 
@@ -227,11 +227,11 @@ sudo nft list ruleset
 
 Because there is no external DNS in this closed network, each LAN client must use:
 
-- **DNS server**: `10.0.0.1` (Pi `eth1` address)
+- **DNS server**: `10.12.0.1` (Pi `eth1` address)
 
 Then clients can open:
 
-- `http://ntpserver.ct`
+- `http://ct.ntpserver.org`
 
 If clients do not use Pi DNS, hostname resolution will fail.
 
@@ -244,9 +244,9 @@ If you want clients to auto-receive IP + DNS, add a dedicated dnsmasq DHCP confi
 ```bash
 sudo tee /etc/dnsmasq.d/ntpserver-dhcp.conf >/dev/null <<'EOF'
 interface=eth1
-dhcp-range=10.0.0.50,10.0.0.200,255.255.255.0,24h
-dhcp-option=option:router,10.0.0.1
-dhcp-option=option:dns-server,10.0.0.1
+dhcp-range=10.12.0.50,10.12.0.200,255.255.0.0,24h
+dhcp-option=option:router,10.12.0.1
+dhcp-option=option:dns-server,10.12.0.1
 EOF
 ```
 
@@ -295,11 +295,11 @@ Use this only if you want the Pi to manage addressing on the LAN.
 ## 12. End-to-end verification flow
 
 1. On Pi:
-   - `curl -I http://10.0.0.1`
+   - `curl -I http://10.12.0.1`
    - `curl -I http://127.0.0.1:5000`
 2. From LAN client on eth1 network:
-   - `nslookup ntpserver.ct 10.0.0.1`
-   - open `http://ntpserver.ct`
+   - `nslookup ct.ntpserver.org 10.12.0.1`
+   - open `http://ct.ntpserver.org`
 3. In UI:
    - verify status updates
    - test WAN DHCP/static switch
@@ -311,9 +311,9 @@ Use this only if you want the Pi to manage addressing on the LAN.
 
 ## 13. Troubleshooting
 
-### `ntpserver.ct` not resolving
+### `ct.ntpserver.org` not resolving
 
-- Client DNS not set to `10.0.0.1`
+- Client DNS not set to `10.12.0.1`
 - dnsmasq not running
 - `dnsmasq.d` config typo
 

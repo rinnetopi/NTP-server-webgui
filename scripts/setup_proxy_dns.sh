@@ -13,7 +13,7 @@ fi
 LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
 LAN_IP="${LAN_IP:-10.12.0.1}"
 DOMAIN_NAME="${DOMAIN_NAME:-ct.ntpserver.org}"
-LAN_PREFIX="${LAN_PREFIX:-24}"
+LAN_PREFIX="${LAN_PREFIX:-16}"
 
 apt-get update
 apt-get install -y nginx dnsmasq

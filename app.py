@@ -375,23 +375,44 @@ def scan_wifi():
         ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"]
     )
 
+    if not success:
+        if SANDBOX_MODE:
+            networks = [
+                {"ssid": "Home_Lab_5G", "signal": "98", "security": "WPA2"},
+                {"ssid": "Pi_Setup_AP", "signal": "75", "security": "WPA2"},
+            ]
+            return jsonify({"success": True, "networks": networks})
+
+        return jsonify(
+            {
+                "success": False,
+                "error": output or "Wi-Fi scan failed on this Raspberry Pi. Check nmcli and Wi-Fi hardware state.",
+                "networks": [],
+            }
+        ), 500
+
     networks = []
-    if success:
-        for line in output.split("\n"):
-            parts = line.split(":")
-            if len(parts) >= 3 and parts[0].strip():
-                networks.append(
-                    {
-                        "ssid": parts[0].strip(),
-                        "signal": parts[1].strip(),
-                        "security": parts[2].strip(),
-                    }
-                )
-    else:
-        networks = [
-            {"ssid": "Home_Lab_5G", "signal": "98", "security": "WPA2"},
-            {"ssid": "Pi_Setup_AP", "signal": "75", "security": "WPA2"},
-        ]
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+
+        parts = [part.strip() for part in line.split(":")]
+        if len(parts) >= 3 and parts[0]:
+            networks.append(
+                {
+                    "ssid": parts[0],
+                    "signal": parts[1],
+                    "security": parts[2] if parts[2] else "Open",
+                }
+            )
+        elif len(parts) >= 2 and parts[0]:
+            networks.append(
+                {
+                    "ssid": parts[0],
+                    "signal": parts[1],
+                    "security": "Open",
+                }
+            )
 
     return jsonify({"success": True, "networks": networks})
 

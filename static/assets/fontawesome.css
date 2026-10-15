@@ -1,0 +1,22 @@
+.fa-solid {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  font-style: normal;
+}
+
+.fa-clock::before { content: "🕒"; }
+.fa-globe::before { content: "🌐"; }
+.fa-network-wired::before { content: "🔌"; }
+.fa-satellite-dish::before { content: "📡"; }
+.fa-code-branch::before { content: "🌿"; }
+.fa-floppy-disk::before { content: "💾"; }
+.fa-microchip::before { content: "💻"; }
+.fa-temperature-half::before { content: "🌡️"; }
+.fa-arrows-rotate::before { content: "🔄"; }
+.fa-magnifying-glass::before { content: "🔎"; }
+.fa-gear::before { content: "⚙️"; }
+.fa-signal::before { content: "📶"; }
+.fa-wifi::before { content: "📶"; }
+.fa-wifi::before { content: "📶"; }
+.fa-bolt::before { content: "⚡"; }

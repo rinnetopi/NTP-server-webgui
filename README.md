@@ -91,7 +91,7 @@ During bootstrap, installer now asks which Ethernet adapter should be WAN vs LAN
 sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
   REPO_BRANCH=main \
   WIFI_INTERFACE=wlan0 \
-  LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
+  LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
@@ -101,14 +101,14 @@ This script will:
 - clone/update repo into `/opt/ntp-server-webgui-src`
 - create `NTP` user + sudo rules
 - deploy app/service to `/opt/ntp-server-webgui`
-- configure nginx + dnsmasq for `ntpserver.ct`
+- configure nginx + dnsmasq for `ct.ntpserver.org`
 - enforce nftables isolation (NTP-only forwarding between interfaces)
 
 If you want to skip the prompt and force mapping, pass explicit values:
 
 ```bash
 sudo WAN_INTERFACE=eth1 LAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 \
-  LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
+  LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
@@ -133,21 +133,21 @@ sudo bash scripts/setup_ntp_service.sh
 
 This installs into `/opt/ntp-server-webgui`, creates a venv, installs dependencies, and starts `ntp-webgui.service`.
 
-### 3. Enable proxy + local DNS for `ntpserver.ct` on closed LAN (`eth1`)
+### 3. Enable proxy + local DNS for `ct.ntpserver.org` on closed LAN (`eth1`)
 
 ```bash
-sudo LAN_INTERFACE=eth1 LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct bash scripts/setup_proxy_dns.sh
+sudo LAN_INTERFACE=eth1 LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org bash scripts/setup_proxy_dns.sh
 ```
 
 What this does:
 
-- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/24` before validating nginx config.
-- Nginx listens only on `10.0.0.1:80` and proxies to `127.0.0.1:5000`.
-- dnsmasq resolves `ntpserver.ct` to `10.0.0.1` on `${LAN_INTERFACE}`.
+- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/16` before validating nginx config.
+- Nginx listens only on `10.12.0.1:80` and proxies to `127.0.0.1:5000`.
+- dnsmasq resolves `ct.ntpserver.org` to `10.12.0.1` on `${LAN_INTERFACE}`.
 
 Critical requirement for clients on the closed network:
 
-- Their DNS server must be set to `10.0.0.1` (the Pi on `eth1`), otherwise `ntpserver.ct` will not resolve.
+- Their DNS server must be set to `10.12.0.1` (the Pi on `eth1`), otherwise `ct.ntpserver.org` will not resolve.
 
 ### 4. Enforce network isolation firewall (NTP-only forwarding)
 

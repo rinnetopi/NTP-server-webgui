@@ -2,6 +2,7 @@ import importlib
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 class FlaskSandboxTestbench(unittest.TestCase):
@@ -85,6 +86,16 @@ class FlaskSandboxTestbench(unittest.TestCase):
         body = response.get_json()
         self.assertTrue(body["success"])
         self.assertGreaterEqual(len(body["networks"]), 1)
+
+    def test_wifi_scan_reports_real_failure(self):
+        with patch.object(self.app_module, "SANDBOX_MODE", False), patch.object(
+            self.app_module, "run_cmd", return_value=(False, "nmcli not available")
+        ):
+            response = self.client.get("/api/network/wifi/scan")
+        self.assertEqual(response.status_code, 500)
+        body = response.get_json()
+        self.assertFalse(body["success"])
+        self.assertIn("nmcli not available", body["error"])
 
     def test_wifi_connect_validation(self):
         response = self.client.post("/api/network/wifi", json={"ssid": "", "password": "x"})
