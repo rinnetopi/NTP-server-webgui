@@ -140,6 +140,21 @@ class FlaskSandboxTestbench(unittest.TestCase):
         body = response.get_json()
         self.assertTrue(body["success"])
 
+    def test_systemd_service_grants_capabilities_needed_for_sudo(self):
+        service_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "deploy", "ntp-webgui.service"
+        )
+        with open(service_path, "r", encoding="utf-8") as handle:
+            content = handle.read()
+
+        for required in (
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_AUDIT_WRITE",
+            "SecureBits=keep-caps",
+        ):
+            self.assertIn(required, content)
+
 
 if __name__ == "__main__":
     unittest.main()

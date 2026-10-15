@@ -10,7 +10,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-USER_NAME="NTP"
+USER_NAME="ntp-admin"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
 WAN_INTERFACE="${WAN_INTERFACE:-}"

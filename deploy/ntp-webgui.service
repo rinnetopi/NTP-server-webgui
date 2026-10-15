@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=NTP
+User=ntp-admin
 WorkingDirectory=/opt/ntp-server-webgui
 ExecStart=/opt/ntp-server-webgui/.venv/bin/python /opt/ntp-server-webgui/app.py
 Restart=on-failure
@@ -18,9 +18,11 @@ Environment=APP_PORT=5000
 EnvironmentFile=-/opt/ntp-server-webgui/runtime.env
 Environment=NTP_SERVICE_NAMES=chrony
 
-# Grant permission to manage network interfaces and services
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_BOOT
-AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_BOOT
+# Grant permission to manage network interfaces and services, and keep the
+# capabilities needed for sudo to switch from the NTP user to root.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_BOOT CAP_SETGID CAP_SETUID CAP_AUDIT_WRITE
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_BOOT CAP_SETGID CAP_SETUID CAP_AUDIT_WRITE
+SecureBits=keep-caps
 
 [Install]
 WantedBy=multi-user.target

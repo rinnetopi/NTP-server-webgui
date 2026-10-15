@@ -10,7 +10,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-USER_NAME="NTP"
+USER_NAME="ntp-admin"
 APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
 SUDOERS_FILE="/etc/sudoers.d/ntp-webgui"
 
@@ -26,11 +26,11 @@ passwd -d "${USER_NAME}" >/dev/null 2>&1 || true
 passwd -l "${USER_NAME}" >/dev/null 2>&1 || true
 
 cat > "${SUDOERS_FILE}" <<'EOF'
-NTP ALL=(root) NOPASSWD: /usr/bin/nmcli
-NTP ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony
-NTP ALL=(root) NOPASSWD: /usr/bin/systemctl reload chrony
-NTP ALL=(root) NOPASSWD: /usr/sbin/reboot
-NTP ALL=(root) NOPASSWD: /usr/bin/reboot
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/nmcli
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl reload chrony
+ntp-admin ALL=(root) NOPASSWD: /usr/sbin/reboot
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/reboot
 EOF
 
 chmod 440 "${SUDOERS_FILE}"
