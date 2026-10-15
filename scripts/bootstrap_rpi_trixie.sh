@@ -20,8 +20,8 @@ LAN_INTERFACE_SET="${LAN_INTERFACE:-}"
 WAN_INTERFACE="${WAN_INTERFACE:-eth0}"
 WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
 LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
-LAN_IP="${LAN_IP:-10.0.0.1}"
-DOMAIN_NAME="${DOMAIN_NAME:-ntpserver.ct}"
+LAN_IP="${LAN_IP:-10.12.0.1}"
+DOMAIN_NAME="${DOMAIN_NAME:-ct.ntpserver.org}"
 SERVICE_USER="${SERVICE_USER:-NTP}"
 
 PACKAGES=(
@@ -70,26 +70,63 @@ prompt_wan_lan_mapping() {
     return
   fi
 
-  echo
-  echo "Select Ethernet role mapping:"
-  echo "  1) WAN=eth0, LAN=eth1 (default)"
-  echo "  2) WAN=eth1, LAN=eth0"
-  read -r -p "Choose [1/2]: " mapping_choice
+  # Detect available Ethernet interfaces
+  local eth_interfaces=()
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^[0-9]+:[[:space:]]*([a-zA-Z0-9]+): ]]; then
+      iface="${BASH_REMATCH[1]}"
+      if [[ "$iface" == eth* ]]; then
+        eth_interfaces+=("$iface")
+      fi
+    fi
+  done < <(ip -o link show)
 
-  case "${mapping_choice}" in
-    ""|1)
-      WAN_INTERFACE="eth0"
-      LAN_INTERFACE="eth1"
-      ;;
-    2)
-      WAN_INTERFACE="eth1"
-      LAN_INTERFACE="eth0"
-      ;;
-    *)
-      echo "ERROR: Invalid choice '${mapping_choice}'. Expected 1 or 2."
-      exit 1
-      ;;
-  esac
+  # Sort interfaces to ensure consistent ordering
+  IFS=$'\n' eth_interfaces=($(sort <<<"${eth_interfaces[*]}"))
+  unset IFS
+
+  if [[ ${#eth_interfaces[@]} -eq 0 ]]; then
+    echo "ERROR: No Ethernet interfaces found on this system."
+    exit 1
+  fi
+
+  if [[ ${#eth_interfaces[@]} -eq 1 ]]; then
+    echo
+    echo "Detected single Ethernet interface: ${eth_interfaces[0]}"
+    echo "Setting as both WAN and LAN (default configuration)."
+    WAN_INTERFACE="${eth_interfaces[0]}"
+    LAN_INTERFACE="${eth_interfaces[0]}"
+  elif [[ ${#eth_interfaces[@]} -ge 2 ]]; then
+    # Use the first two interfaces for WAN/LAN selection
+    local eth0="${eth_interfaces[0]}"
+    local eth1="${eth_interfaces[1]}"
+    
+    echo
+    echo "Detected Ethernet interfaces:"
+    echo "  1) ${eth0} (WAN)"
+    echo "  2) ${eth1} (LAN)"
+    read -r -p "Choose WAN interface [1/2] (default 1): " wan_choice
+    wan_choice="${wan_choice:-1}"
+    
+    case "${wan_choice}" in
+      1)
+        WAN_INTERFACE="${eth0}"
+        LAN_INTERFACE="${eth1}"
+        ;;
+      2)
+        WAN_INTERFACE="${eth1}"
+        LAN_INTERFACE="${eth0}"
+        ;;
+      *)
+        echo "ERROR: Invalid choice '${wan_choice}'. Expected 1 or 2."
+        exit 1
+        ;;
+    esac
+    
+    echo "Selected interfaces:"
+    echo "  WAN: ${WAN_INTERFACE}"
+    echo "  LAN: ${LAN_INTERFACE}"
+  fi
 }
 
 get_interface_ip() {
@@ -119,7 +156,13 @@ clone_or_update_repo() {
     log "Updating existing repository in ${SRC_DIR}"
     git -C "${SRC_DIR}" fetch --all --prune
     git -C "${SRC_DIR}" checkout "${REPO_BRANCH}"
-    git -C "${SRC_DIR}" pull --ff-only origin "${REPO_BRANCH}"
+    # Safely update repo: reset to origin state to handle local changes gracefully
+    if ! git -C "${SRC_DIR}" pull --ff-only origin "${REPO_BRANCH}"; then
+      log "Warning: Failed to fast-forward pull. Resetting to origin/${REPO_BRANCH}..."
+      git -C "${SRC_DIR}" reset --hard "origin/${REPO_BRANCH}"
+    fi
+    # Clean untracked files and directories (safe since this is a cacheable mirror)
+    git -C "${SRC_DIR}" clean -fdx
   else
     log "Cloning ${REPO_URL} (branch ${REPO_BRANCH}) into ${SRC_DIR}"
     rm -rf "${SRC_DIR}"

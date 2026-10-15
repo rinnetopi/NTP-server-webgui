@@ -11,8 +11,8 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
-LAN_IP="${LAN_IP:-10.0.0.1}"
-DOMAIN_NAME="${DOMAIN_NAME:-ntpserver.ct}"
+LAN_IP="${LAN_IP:-10.12.0.1}"
+DOMAIN_NAME="${DOMAIN_NAME:-ct.ntpserver.org}"
 LAN_PREFIX="${LAN_PREFIX:-24}"
 
 apt-get update

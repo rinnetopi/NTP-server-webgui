@@ -399,8 +399,8 @@ def scan_wifi():
 @app.route("/api/network/lan", methods=["POST"])
 def configure_lan():
     data = request.get_json(silent=True) or {}
-    ip_address = str(data.get("ip", "10.0.0.1")).strip()
-    subnet = str(data.get("subnet", "255.255.255.0")).strip()
+    ip_address = str(data.get("ip", "10.12.0.1")).strip()
+    subnet = str(data.get("subnet", "255.255.0.0")).strip()
 
     if not IP_REGEX.match(ip_address):
         return jsonify({"success": False, "error": "Invalid LAN IP address."}), 400
@@ -441,6 +441,126 @@ def configure_lan():
             "message": f"LAN {LAN_CONNECTION_NAME} configured to static {ip_address}.",
         }
     )
+
+
+@app.route("/api/system/ntp-logs", methods=["GET"])
+def get_ntp_logs():
+    """Retrieve recent chrony NTP logs."""
+    try:
+        # Get last 100 lines of chrony logs
+        success, output = run_cmd(["sudo", "journalctl", "-u", "chrony", "--no-pager", "-n", "100"])
+        if not success:
+            return jsonify({"success": False, "error": "Failed to retrieve NTP logs"}), 500
+        
+        return jsonify({
+            "success": True,
+            "logs": output
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/system/ntp-sources", methods=["GET"])
+def get_ntp_sources():
+    """Retrieve current NTP sources information."""
+    try:
+        # Get NTP sources using chronyc sources
+        success, output = run_cmd(["sudo", "chronyc", "sources", "-v"])
+        if not success:
+            return jsonify({"success": False, "error": "Failed to retrieve NTP sources"}), 500
+        
+        return jsonify({
+            "success": True,
+            "sources": output
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/system/service-status", methods=["GET"])
+def get_service_status():
+    """Retrieve status of all system services."""
+    try:
+        services = ["chrony", "nginx", "dnsmasq", "nftables"]
+        service_status = {}
+        
+        for service in services:
+            success, output = run_cmd(["sudo", "systemctl", "is-active", service])
+            if success:
+                service_status[service] = output.strip()
+            else:
+                service_status[service] = "unknown"
+        
+        return jsonify({
+            "success": True,
+            "status": service_status
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/system/resources", methods=["GET"])
+def get_system_resources():
+    """Retrieve detailed system resource usage."""
+    try:
+        # Get CPU load
+        success, load_output = run_cmd(["uptime"])
+        if not success:
+            cpu_load = "unknown"
+        else:
+            # Extract the load average from uptime output
+            import re
+            match = re.search(r'load average: ([\d\.]+), ([\d\.]+), ([\d\.]+)', load_output)
+            if match:
+                cpu_load = [match.group(1), match.group(2), match.group(3)]
+            else:
+                cpu_load = "unknown"
+        
+        # Get memory usage
+        success, mem_output = run_cmd(["free", "-m"])
+        if not success:
+            memory_info = {}
+        else:
+            lines = mem_output.strip().split('\n')
+            if len(lines) >= 2:
+                mem_line = lines[1].split()
+                if len(mem_line) >= 4:
+                    memory_info = {
+                        "total": f"{mem_line[1]} MB",
+                        "used": f"{mem_line[2]} MB",
+                        "free": f"{mem_line[3]} MB"
+                    }
+                else:
+                    memory_info = {}
+            else:
+                memory_info = {}
+        
+        # Get disk usage
+        success, disk_output = run_cmd(["df", "-h"])
+        if not success:
+            disk_usage = []
+        else:
+            lines = disk_output.strip().split('\n')[1:]  # Skip header
+            disk_usage = []
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 5:
+                    disk_usage.append({
+                        "filesystem": parts[0],
+                        "size": parts[1],
+                        "used": parts[2],
+                        "available": parts[3],
+                        "use_percent": parts[4]
+                    })
+        
+        return jsonify({
+            "success": True,
+            "cpu_load": cpu_load,
+            "memory": memory_info,
+            "disk_usage": disk_usage
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/service/ntp", methods=["POST"])

@@ -8,6 +8,10 @@ For full clean-install setup on Raspberry Pi OS Trixie (users, chrony, service, 
 
 - [`docs/IMPLEMENTATION-GUIDE-RPI-TRIXIE.md`](docs/IMPLEMENTATION-GUIDE-RPI-TRIXIE.md)
 
+## Bootstrap repository behavior
+
+The bootstrap script treats `/opt/ntp-server-webgui-src` as a disposable/cacheable mirror. If local changes are present in the source repository, they will be automatically reset to match the remote origin state during bootstrap updates.
+
 ## Features
 
 - Live system telemetry endpoint (`/api/system/status`) with temperature, load, uptime, and chrony state.
@@ -17,11 +21,23 @@ For full clean-install setup on Raspberry Pi OS Trixie (users, chrony, service, 
 - Wi-Fi DHCP/static handling with SSID connection + connection profile update.
 - Service controls for chrony restart/reload and system reboot.
 
+## Web UI Assets
+
+The web UI is designed to work completely offline. All assets are vendored locally to ensure no external dependencies:
+
+- Tailwind CSS: Local copy included in `static/assets/tailwind.min.js`
+- Font Awesome: Local copy included in `static/assets/fontawesome.css`  
+- Google Fonts: Local fallbacks for Inter font family
+
 ## API routes
 
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/system/status` | `GET` | Return telemetry and chrony status |
+| `/api/system/ntp-logs` | `GET` | Get recent NTP logs |
+| `/api/system/ntp-sources` | `GET` | Get current NTP sources information |
+| `/api/system/service-status` | `GET` | Get status of all system services |
+| `/api/system/resources` | `GET` | Get detailed system resource usage |
 | `/api/network/wan` | `POST` | Set WAN DHCP or static config |
 | `/api/network/lan` | `POST` | Set LAN static config |
 | `/api/network/wifi/scan` | `GET` | Scan nearby Wi-Fi networks |

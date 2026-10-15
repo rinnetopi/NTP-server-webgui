@@ -19,7 +19,7 @@ It configures:
 - **WAN**: `eth0` (internet/upstream)
 - **Wi-Fi**: `wlan0` (optional upstream)
 - **LAN**: `eth1` (isolated local subnet for clients)
-- **Web UI ingress**: `http://ntpserver.ct` on the **eth1 network only**
+- **Web UI ingress**: `http://ct.ntpserver.org` on the **eth1 network only**
 
 Example LAN:
 
@@ -29,7 +29,13 @@ Example LAN:
 
 ---
 
-## 2. Clean OS preparation
+## 2. Bootstrap repository behavior
+
+The bootstrap script treats `/opt/ntp-server-webgui-src` as a disposable/cacheable mirror. If local changes are present in the source repository, they will be automatically reset to match the remote origin state during bootstrap updates.
+
+---
+
+## 3. Clean OS preparation
 
 Run on the Pi as a sudo-capable user:
 
@@ -389,3 +395,29 @@ sudo systemctl restart ntp-webgui
 ```
 
 Then verify service and UI accessibility again.
+
+## API routes
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/system/status` | `GET` | Return telemetry and chrony status |
+| `/api/system/ntp-logs` | `GET` | Get recent NTP logs |
+| `/api/system/ntp-sources` | `GET` | Get current NTP sources information |
+| `/api/system/service-status` | `GET` | Get status of all system services |
+| `/api/system/resources` | `GET` | Get detailed system resource usage |
+| `/api/network/wan` | `POST` | Set WAN DHCP or static config |
+| `/api/network/lan` | `POST` | Set LAN static config |
+| `/api/network/wifi/scan` | `GET` | Scan nearby Wi-Fi networks |
+| `/api/network/wifi` | `POST` | Connect to Wi-Fi |
+| `/api/service/ntp` | `POST` | Restart or reload chrony |
+| `/api/service/reboot` | `POST` | Reboot the device |
+
+## Run locally
+
+To run the application in development mode, execute:
+
+```bash
+python3 app.py
+```
+
+The web UI will be accessible at [http://localhost:5000](http://localhost:5000) and all API endpoints are available under `/api/`.

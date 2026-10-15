@@ -110,7 +110,7 @@ class FlaskSandboxTestbench(unittest.TestCase):
     def test_lan_update_success(self):
         response = self.client.post(
             "/api/network/lan",
-            json={"ip": "10.0.0.10", "subnet": "255.255.255.0"},
+            json={"ip": "10.12.0.10", "subnet": "255.255.0.0"},
         )
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
