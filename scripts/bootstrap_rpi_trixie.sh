@@ -15,6 +15,8 @@ REPO_BRANCH="${REPO_BRANCH:-main}"
 SRC_DIR="${SRC_DIR:-/opt/ntp-server-webgui-src}"
 APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
 
+WAN_INTERFACE_SET="${WAN_INTERFACE:-}"
+LAN_INTERFACE_SET="${LAN_INTERFACE:-}"
 WAN_INTERFACE="${WAN_INTERFACE:-eth0}"
 WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
 LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
@@ -40,6 +42,54 @@ PACKAGES=(
 
 log() {
   echo "[bootstrap] $*"
+}
+
+validate_wan_lan_mapping() {
+  if [[ "${WAN_INTERFACE}" == "${LAN_INTERFACE}" ]]; then
+    echo "ERROR: WAN_INTERFACE and LAN_INTERFACE cannot be the same."
+    exit 1
+  fi
+
+  if [[ "${WAN_INTERFACE}" != "eth0" && "${WAN_INTERFACE}" != "eth1" ]]; then
+    echo "ERROR: WAN_INTERFACE must be eth0 or eth1."
+    exit 1
+  fi
+
+  if [[ "${LAN_INTERFACE}" != "eth0" && "${LAN_INTERFACE}" != "eth1" ]]; then
+    echo "ERROR: LAN_INTERFACE must be eth0 or eth1."
+    exit 1
+  fi
+}
+
+prompt_wan_lan_mapping() {
+  if [[ -n "${WAN_INTERFACE_SET:-}" || -n "${LAN_INTERFACE_SET:-}" ]]; then
+    return
+  fi
+
+  if [[ ! -t 0 ]]; then
+    return
+  fi
+
+  echo
+  echo "Select Ethernet role mapping:"
+  echo "  1) WAN=eth0, LAN=eth1 (default)"
+  echo "  2) WAN=eth1, LAN=eth0"
+  read -r -p "Choose [1/2]: " mapping_choice
+
+  case "${mapping_choice}" in
+    ""|1)
+      WAN_INTERFACE="eth0"
+      LAN_INTERFACE="eth1"
+      ;;
+    2)
+      WAN_INTERFACE="eth1"
+      LAN_INTERFACE="eth0"
+      ;;
+    *)
+      echo "ERROR: Invalid choice '${mapping_choice}'. Expected 1 or 2."
+      exit 1
+      ;;
+  esac
 }
 
 get_interface_ip() {
@@ -79,6 +129,8 @@ clone_or_update_repo() {
 
 main() {
   log "Starting full Raspberry Pi Trixie bootstrap"
+  prompt_wan_lan_mapping
+  validate_wan_lan_mapping
   install_missing_packages
 
   log "Ensuring core services are enabled"
@@ -98,7 +150,8 @@ main() {
   bash "${SRC_DIR}/scripts/setup_ntp_user.sh"
 
   log "Deploying app and systemd service to ${APP_DIR}"
-  APP_DIR="${APP_DIR}" bash "${SRC_DIR}/scripts/setup_ntp_service.sh"
+  WAN_INTERFACE="${WAN_INTERFACE}" LAN_INTERFACE="${LAN_INTERFACE}" WIFI_INTERFACE="${WIFI_INTERFACE}" APP_DIR="${APP_DIR}" \
+    bash "${SRC_DIR}/scripts/setup_ntp_service.sh"
 
   log "Configuring reverse proxy + local DNS (${DOMAIN_NAME} -> ${LAN_IP})"
   LAN_INTERFACE="${LAN_INTERFACE}" LAN_IP="${LAN_IP}" DOMAIN_NAME="${DOMAIN_NAME}" \

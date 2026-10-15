@@ -82,12 +82,13 @@ If you want automated end-to-end setup on a clean Pi, run:
 ```bash
 sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
   REPO_BRANCH=main \
-  WAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 LAN_INTERFACE=eth1 \
+  WIFI_INTERFACE=wlan0 \
   LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
 This executes dependency installation, repo sync, user/sudo setup, service deployment, proxy+DNS, and firewall isolation in one flow.
+The bootstrap script asks whether WAN/LAN should be `eth0/eth1` or `eth1/eth0`. To skip the prompt, pass explicit `WAN_INTERFACE` and `LAN_INTERFACE`.
 
 ---
 
@@ -172,8 +173,9 @@ sudo LAN_INTERFACE=eth1 LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
 
 What it does:
 
+- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/24` before validating nginx config.
 - Nginx listens on `10.0.0.1:80` and proxies to `127.0.0.1:5000`
-- dnsmasq maps `ntpserver.ct -> 10.0.0.1` on `eth1`
+- dnsmasq maps `ntpserver.ct -> 10.0.0.1` on `${LAN_INTERFACE}`
 
 Validate:
 

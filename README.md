@@ -67,12 +67,14 @@ This repo now defaults to:
 - NTP service: `chrony`
 - Flask bind: `127.0.0.1:5000` (for reverse proxy)
 
+During bootstrap, installer now asks which Ethernet adapter should be WAN vs LAN (swap between `eth0` and `eth1`).
+
 ### One-command full bootstrap (clean Pi)
 
 ```bash
 sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
   REPO_BRANCH=main \
-  WAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 LAN_INTERFACE=eth1 \
+  WIFI_INTERFACE=wlan0 \
   LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
@@ -85,6 +87,14 @@ This script will:
 - deploy app/service to `/opt/ntp-server-webgui`
 - configure nginx + dnsmasq for `ntpserver.ct`
 - enforce nftables isolation (NTP-only forwarding between interfaces)
+
+If you want to skip the prompt and force mapping, pass explicit values:
+
+```bash
+sudo WAN_INTERFACE=eth1 LAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 \
+  LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct \
+  bash scripts/bootstrap_rpi_trixie.sh
+```
 
 ### 1. Create service user and privileged command rights
 
@@ -115,8 +125,9 @@ sudo LAN_INTERFACE=eth1 LAN_IP=10.0.0.1 DOMAIN_NAME=ntpserver.ct bash scripts/se
 
 What this does:
 
+- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/24` before validating nginx config.
 - Nginx listens only on `10.0.0.1:80` and proxies to `127.0.0.1:5000`.
-- dnsmasq resolves `ntpserver.ct` to `10.0.0.1` on `eth1`.
+- dnsmasq resolves `ntpserver.ct` to `10.0.0.1` on `${LAN_INTERFACE}`.
 
 Critical requirement for clients on the closed network:
 
@@ -171,6 +182,7 @@ This blocks forwarding between WAN/Wi-Fi and LAN by default and permits only UDP
 - `WAN_CONNECTION_NAME` (default: `eth0`)
 - `LAN_CONNECTION_NAME` (default: `eth1`)
 - `WIFI_CONNECTION_NAME` (default: `wlan0`)
+- Runtime mapping file: `/opt/ntp-server-webgui/runtime.env` (created by setup scripts and editable from UI)
 - `NTP_SERVICE_NAMES` (default: `chrony`)
 - Presence of `chronyc`, `nmcli`, and `systemctl` on target OS
 - `sudo` permissions for the app service user (network changes, chrony control, reboot)

@@ -15,6 +15,13 @@ IP_REGEX = re.compile(
 SUBNET_REGEX = IP_REGEX
 SSID_REGEX = re.compile(r"^[a-zA-Z0-9_\-\.\s]{1,32}$")
 
+RUNTIME_ENV_PATH = os.getenv("RUNTIME_ENV_PATH", "/opt/ntp-server-webgui/runtime.env")
+INTERFACE_KEY_MAP = {
+    "wan": "WAN_CONNECTION_NAME",
+    "lan": "LAN_CONNECTION_NAME",
+    "wifi": "WIFI_CONNECTION_NAME",
+}
+
 
 def env_flag(name, default=False):
     value = os.getenv(name)
@@ -23,10 +30,61 @@ def env_flag(name, default=False):
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def load_runtime_env(path):
+    runtime = {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                runtime[key.strip()] = value.strip()
+    except OSError:
+        return {}
+    return runtime
+
+
+def build_interface_roles():
+    runtime = load_runtime_env(RUNTIME_ENV_PATH)
+    return {
+        "wan": runtime.get(INTERFACE_KEY_MAP["wan"], os.getenv(INTERFACE_KEY_MAP["wan"], "eth0")),
+        "lan": runtime.get(INTERFACE_KEY_MAP["lan"], os.getenv(INTERFACE_KEY_MAP["lan"], "eth1")),
+        "wifi": runtime.get(INTERFACE_KEY_MAP["wifi"], os.getenv(INTERFACE_KEY_MAP["wifi"], "wlan0")),
+    }
+
+
+def persist_interface_roles(roles):
+    runtime = load_runtime_env(RUNTIME_ENV_PATH)
+    runtime[INTERFACE_KEY_MAP["wan"]] = roles["wan"]
+    runtime[INTERFACE_KEY_MAP["lan"]] = roles["lan"]
+    runtime[INTERFACE_KEY_MAP["wifi"]] = roles["wifi"]
+
+    lines = [f"{key}={runtime[key]}" for key in sorted(runtime.keys())]
+    os.makedirs(os.path.dirname(RUNTIME_ENV_PATH), exist_ok=True)
+    with open(RUNTIME_ENV_PATH, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+
+
+def validate_wan_lan_swap(wan_name, lan_name):
+    if wan_name == lan_name:
+        return False, "WAN and LAN interfaces must be different."
+
+    allowed = {"eth0", "eth1"}
+    if wan_name not in allowed or lan_name not in allowed:
+        return False, "WAN/LAN mapping supports only eth0 and eth1."
+
+    if {wan_name, lan_name} != allowed:
+        return False, "WAN/LAN mapping must be one eth0 and one eth1."
+
+    return True, ""
+
+
 SANDBOX_MODE = env_flag("SANDBOX_MODE", default=False)
-WAN_CONNECTION_NAME = os.getenv("WAN_CONNECTION_NAME", "eth0")
-LAN_CONNECTION_NAME = os.getenv("LAN_CONNECTION_NAME", "eth1")
-WIFI_CONNECTION_NAME = os.getenv("WIFI_CONNECTION_NAME", "wlan0")
+INTERFACE_ROLES = build_interface_roles()
+WAN_CONNECTION_NAME = INTERFACE_ROLES["wan"]
+LAN_CONNECTION_NAME = INTERFACE_ROLES["lan"]
+WIFI_CONNECTION_NAME = INTERFACE_ROLES["wifi"]
 NTP_SERVICE_NAMES = [
     name.strip()
     for name in os.getenv("NTP_SERVICE_NAMES", "chrony").split(",")
@@ -99,6 +157,56 @@ def subnet_mask_to_prefix(mask):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/network/interfaces", methods=["GET"])
+def get_interface_mapping():
+    return jsonify(
+        {
+            "success": True,
+            "mapping": {
+                "wan": WAN_CONNECTION_NAME,
+                "lan": LAN_CONNECTION_NAME,
+                "wifi": WIFI_CONNECTION_NAME,
+            },
+        }
+    )
+
+
+@app.route("/api/network/interfaces", methods=["POST"])
+def set_interface_mapping():
+    global WAN_CONNECTION_NAME, LAN_CONNECTION_NAME, WIFI_CONNECTION_NAME, INTERFACE_ROLES
+
+    data = request.get_json(silent=True) or {}
+    wan_name = str(data.get("wan", WAN_CONNECTION_NAME)).strip()
+    lan_name = str(data.get("lan", LAN_CONNECTION_NAME)).strip()
+    wifi_name = str(data.get("wifi", WIFI_CONNECTION_NAME)).strip()
+
+    is_valid, validation_error = validate_wan_lan_swap(wan_name, lan_name)
+    if not is_valid:
+        return jsonify({"success": False, "error": validation_error}), 400
+
+    if not wifi_name:
+        return jsonify({"success": False, "error": "Wi-Fi interface cannot be empty."}), 400
+
+    updated_roles = {"wan": wan_name, "lan": lan_name, "wifi": wifi_name}
+    try:
+        persist_interface_roles(updated_roles)
+    except OSError as error:
+        return jsonify({"success": False, "error": f"Failed to persist mapping: {error}"}), 500
+
+    INTERFACE_ROLES = updated_roles
+    WAN_CONNECTION_NAME = wan_name
+    LAN_CONNECTION_NAME = lan_name
+    WIFI_CONNECTION_NAME = wifi_name
+
+    return jsonify(
+        {
+            "success": True,
+            "message": f"Interface mapping updated: WAN={wan_name}, LAN={lan_name}, Wi-Fi={wifi_name}.",
+            "mapping": updated_roles,
+        }
+    )
 
 
 @app.route("/api/system/status", methods=["GET"])
@@ -200,7 +308,9 @@ def configure_wan():
     if not up_success:
         return jsonify({"success": False, "error": up_output}), 500
 
-    return jsonify({"success": True, "message": f"WAN eth0 configured to {mode}."})
+    return jsonify(
+        {"success": True, "message": f"WAN {WAN_CONNECTION_NAME} configured to {mode}."}
+    )
 
 
 @app.route("/api/network/wifi", methods=["POST"])
@@ -325,7 +435,12 @@ def configure_lan():
     if not up_success:
         return jsonify({"success": False, "error": up_output}), 500
 
-    return jsonify({"success": True, "message": f"LAN eth1 configured to static {ip_address}."})
+    return jsonify(
+        {
+            "success": True,
+            "message": f"LAN {LAN_CONNECTION_NAME} configured to static {ip_address}.",
+        }
+    )
 
 
 @app.route("/api/service/ntp", methods=["POST"])

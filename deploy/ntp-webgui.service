@@ -15,9 +15,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=SANDBOX_MODE=false
 Environment=APP_HOST=127.0.0.1
 Environment=APP_PORT=5000
-Environment=WAN_CONNECTION_NAME=eth0
-Environment=LAN_CONNECTION_NAME=eth1
-Environment=WIFI_CONNECTION_NAME=wlan0
+EnvironmentFile=-/opt/ntp-server-webgui/runtime.env
 Environment=NTP_SERVICE_NAMES=chrony
 
 # Grant permission to manage network interfaces and services
