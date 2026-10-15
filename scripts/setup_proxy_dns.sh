@@ -13,9 +13,17 @@ fi
 LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
 LAN_IP="${LAN_IP:-10.0.0.1}"
 DOMAIN_NAME="${DOMAIN_NAME:-ntpserver.ct}"
+LAN_PREFIX="${LAN_PREFIX:-24}"
 
 apt-get update
 apt-get install -y nginx dnsmasq
+
+nmcli con modify "${LAN_INTERFACE}" \
+  ipv4.addresses "${LAN_IP}/${LAN_PREFIX}" \
+  ipv4.method manual \
+  ipv4.gateway "" \
+  ipv4.dns ""
+nmcli con up "${LAN_INTERFACE}"
 
 cat > /etc/nginx/sites-available/ntpserver <<EOF
 server {

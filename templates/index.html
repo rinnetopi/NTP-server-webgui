@@ -139,7 +139,7 @@
                     <i class="fa-solid fa-globe text-lg"></i>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-400 font-medium">WAN Source (eth0)</p>
+                    <p id="label-wan-summary" class="text-xs text-gray-400 font-medium">WAN Source (eth0)</p>
                     <p class="text-sm font-bold text-white tracking-wide truncate max-w-[150px]" id="disp-wan">DHCP (Active)</p>
                 </div>
             </div>
@@ -148,7 +148,7 @@
                     <i class="fa-solid fa-network-wired text-lg"></i>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-400 font-medium">LAN Server (eth1)</p>
+                    <p id="label-lan-summary" class="text-xs text-gray-400 font-medium">LAN Server (eth1)</p>
                     <p class="text-sm font-bold text-white tracking-wide" id="disp-lan">10.0.0.1 (Static)</p>
                 </div>
             </div>
@@ -163,12 +163,44 @@
             </div>
         </div>
 
+        <section class="tactile-card p-6 space-y-4">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-code-branch text-blue-400 text-lg"></i>
+                <div>
+                    <h2 class="text-base font-semibold text-white">Interface Role Mapping</h2>
+                    <p class="text-xs text-gray-400">Choose which Ethernet adapter is WAN or LAN.</p>
+                </div>
+            </div>
+            <form id="interface-map-form" onsubmit="saveInterfaceMapping(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">WAN Interface</label>
+                    <select id="wan-interface-select" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input appearance-none">
+                        <option value="eth0">eth0</option>
+                        <option value="eth1">eth1</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">LAN Interface</label>
+                    <select id="lan-interface-select" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input appearance-none">
+                        <option value="eth0">eth0</option>
+                        <option value="eth1">eth1</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2 flex justify-end pt-1">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Save Interface Mapping</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
         <section class="tactile-card p-6 space-y-5">
             <div class="flex items-center justify-between border-b border-white/5 pb-4">
                 <div class="flex items-center space-x-3">
                     <i class="fa-solid fa-globe text-blue-400 text-lg"></i>
                     <div>
-                        <h2 class="text-base font-semibold text-white">WAN Network Interface (eth0)</h2>
+                        <h2 id="label-wan-title" class="text-base font-semibold text-white">WAN Network Interface (eth0)</h2>
                         <p class="text-xs text-gray-400">Internet & Upstream NTP Sync</p>
                     </div>
                 </div>
@@ -208,7 +240,7 @@
                 <div class="flex items-center space-x-3">
                     <i class="fa-solid fa-wifi text-blue-400 text-lg"></i>
                     <div>
-                        <h2 class="text-base font-semibold text-white">Wireless Configuration (wlan0)</h2>
+                        <h2 id="label-wifi-title" class="text-base font-semibold text-white">Wireless Configuration (wlan0)</h2>
                         <p class="text-xs text-gray-400">Alternative Upstream Internet</p>
                     </div>
                 </div>
@@ -275,7 +307,7 @@
                 <div class="flex items-center space-x-3">
                     <i class="fa-solid fa-network-wired text-blue-400 text-lg"></i>
                     <div>
-                        <h2 class="text-base font-semibold text-white">LAN Server Interface (eth1)</h2>
+                        <h2 id="label-lan-title" class="text-base font-semibold text-white">LAN Server Interface (eth1)</h2>
                         <p class="text-xs text-gray-400">Closed Local Network (No Internet / No Gateway / No DNS)</p>
                     </div>
                 </div>
@@ -341,6 +373,68 @@
     </div>
 
     <script>
+        const interfaceRoles = {
+            wan: 'eth0',
+            lan: 'eth1',
+            wifi: 'wlan0'
+        };
+
+        function applyInterfaceLabels() {
+            document.getElementById('label-wan-summary').innerText = `WAN Source (${interfaceRoles.wan})`;
+            document.getElementById('label-lan-summary').innerText = `LAN Server (${interfaceRoles.lan})`;
+            document.getElementById('label-wan-title').innerText = `WAN Network Interface (${interfaceRoles.wan})`;
+            document.getElementById('label-lan-title').innerText = `LAN Server Interface (${interfaceRoles.lan})`;
+            document.getElementById('label-wifi-title').innerText = `Wireless Configuration (${interfaceRoles.wifi})`;
+
+            document.getElementById('wan-interface-select').value = interfaceRoles.wan;
+            document.getElementById('lan-interface-select').value = interfaceRoles.lan;
+        }
+
+        async function loadInterfaceMapping() {
+            try {
+                const res = await fetch('/api/network/interfaces');
+                const data = await res.json();
+                if (data.success && data.mapping) {
+                    interfaceRoles.wan = data.mapping.wan || interfaceRoles.wan;
+                    interfaceRoles.lan = data.mapping.lan || interfaceRoles.lan;
+                    interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
+                    applyInterfaceLabels();
+                }
+            } catch (error) {
+                showToast('Mapping Error', 'Could not load interface mapping.', true);
+            }
+        }
+
+        async function saveInterfaceMapping(event) {
+            event.preventDefault();
+            const wan = document.getElementById('wan-interface-select').value;
+            const lan = document.getElementById('lan-interface-select').value;
+            if (wan === lan) {
+                showToast('Mapping Error', 'WAN and LAN must be different interfaces.', true);
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/network/interfaces', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ wan, lan, wifi: interfaceRoles.wifi })
+                });
+                const data = await res.json();
+                if (data.success && data.mapping) {
+                    interfaceRoles.wan = data.mapping.wan;
+                    interfaceRoles.lan = data.mapping.lan;
+                    interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
+                    applyInterfaceLabels();
+                    showToast('Mapping Saved', `WAN=${interfaceRoles.wan}, LAN=${interfaceRoles.lan}`);
+                } else {
+                    showToast('Mapping Error', data.error || 'Failed to save mapping.', true);
+                }
+            } catch (error) {
+                showToast('Mapping Error', 'Failed to save mapping.', true);
+            }
+        }
+
         async function fetchSystemStatus() {
             try {
                 const res = await fetch('/api/system/status');
@@ -358,6 +452,7 @@
         }
         setInterval(fetchSystemStatus, 5000);
         fetchSystemStatus();
+        loadInterfaceMapping();
 
         function toggleWanMode(isStatic) {
             const staticFields = document.getElementById('wan-static-fields');
@@ -474,7 +569,7 @@
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('disp-wan').innerText = isStatic ? payload.ip : "DHCP (Active)";
-                    showToast("WAN Saved", "eth0 network configuration applied.");
+                    showToast("WAN Saved", `${interfaceRoles.wan} network configuration applied.`);
                 } else {
                     showToast("Error", data.error || "Failed to update WAN.", true);
                 }
@@ -528,7 +623,7 @@
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('disp-lan').innerText = `${payload.ip} (Static)`;
-                    showToast("LAN Saved", "eth1 NTP server IP updated.");
+                    showToast("LAN Saved", `${interfaceRoles.lan} NTP server IP updated.`);
                 } else {
                     showToast("Error", data.error, true);
                 }
