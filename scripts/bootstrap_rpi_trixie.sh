@@ -17,9 +17,9 @@ APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
 
 WAN_INTERFACE_SET="${WAN_INTERFACE:-}"
 LAN_INTERFACE_SET="${LAN_INTERFACE:-}"
-WAN_INTERFACE="${WAN_INTERFACE:-eth0}"
+WAN_INTERFACE="${WAN_INTERFACE:-}"
 WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
-LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
+LAN_INTERFACE="${LAN_INTERFACE:-}"
 LAN_IP="${LAN_IP:-10.12.0.1}"
 DOMAIN_NAME="${DOMAIN_NAME:-ct.ntpserver.org}"
 SERVICE_USER="${SERVICE_USER:-NTP}"
@@ -45,24 +45,71 @@ log() {
 }
 
 validate_wan_lan_mapping() {
+  if [[ -z "${WAN_INTERFACE}" || -z "${LAN_INTERFACE}" ]]; then
+    echo "ERROR: WAN_INTERFACE and LAN_INTERFACE must both be set."
+    exit 1
+  fi
+
   if [[ "${WAN_INTERFACE}" == "${LAN_INTERFACE}" ]]; then
-    echo "ERROR: WAN_INTERFACE and LAN_INTERFACE cannot be the same."
-    exit 1
+    echo "WARN: Single-interface mode detected; WAN and LAN are the same interface."
+    return
+  fi
+}
+
+detect_wan_interface() {
+  local default_iface=""
+  default_iface="$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')"
+  if [[ -n "${default_iface}" ]] && [[ "${default_iface}" != "lo" ]]; then
+    echo "${default_iface}"
+    return 0
   fi
 
-  if [[ "${WAN_INTERFACE}" != "eth0" && "${WAN_INTERFACE}" != "eth1" ]]; then
-    echo "ERROR: WAN_INTERFACE must be eth0 or eth1."
-    exit 1
+  local active_iface=""
+  active_iface="$(nmcli -t -f DEVICE,TYPE,STATE connection show --active 2>/dev/null | awk -F: '$2=="ethernet" && $3=="activated" {print $1; exit}')"
+  if [[ -n "${active_iface}" ]]; then
+    echo "${active_iface}"
+    return 0
   fi
 
-  if [[ "${LAN_INTERFACE}" != "eth0" && "${LAN_INTERFACE}" != "eth1" ]]; then
-    echo "ERROR: LAN_INTERFACE must be eth0 or eth1."
-    exit 1
-  fi
+  local iface
+  for iface in $(ls /sys/class/net 2>/dev/null | sort); do
+    if [[ "${iface}" == "lo" ]]; then
+      continue
+    fi
+    if ip -4 -o addr show dev "${iface}" 2>/dev/null | grep -q 'inet '; then
+      echo "${iface}"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 prompt_wan_lan_mapping() {
   if [[ -n "${WAN_INTERFACE_SET:-}" || -n "${LAN_INTERFACE_SET:-}" ]]; then
+    return
+  fi
+
+  local active_wan=""
+  active_wan="$(detect_wan_interface || true)"
+  if [[ -n "${active_wan}" ]]; then
+    WAN_INTERFACE="${active_wan}"
+    LAN_INTERFACE=""
+    for iface in $(ls /sys/class/net 2>/dev/null | sort); do
+      if [[ "${iface}" == "lo" || "${iface}" == "${WAN_INTERFACE}" ]]; then
+        continue
+      fi
+      if [[ "${iface}" == eth* || "${iface}" == en* ]]; then
+        LAN_INTERFACE="${iface}"
+        break
+      fi
+    done
+    if [[ -z "${LAN_INTERFACE}" ]]; then
+      LAN_INTERFACE="${WAN_INTERFACE}"
+    fi
+    echo
+    echo "Detected active upstream WAN interface: ${WAN_INTERFACE}"
+    echo "Using LAN interface: ${LAN_INTERFACE}"
     return
   fi
 
@@ -97,17 +144,16 @@ prompt_wan_lan_mapping() {
     WAN_INTERFACE="${eth_interfaces[0]}"
     LAN_INTERFACE="${eth_interfaces[0]}"
   elif [[ ${#eth_interfaces[@]} -ge 2 ]]; then
-    # Use the first two interfaces for WAN/LAN selection
     local eth0="${eth_interfaces[0]}"
     local eth1="${eth_interfaces[1]}"
-    
+
     echo
     echo "Detected Ethernet interfaces:"
     echo "  1) ${eth0} (WAN)"
     echo "  2) ${eth1} (LAN)"
     read -r -p "Choose WAN interface [1/2] (default 1): " wan_choice
     wan_choice="${wan_choice:-1}"
-    
+
     case "${wan_choice}" in
       1)
         WAN_INTERFACE="${eth0}"
@@ -122,7 +168,7 @@ prompt_wan_lan_mapping() {
         exit 1
         ;;
     esac
-    
+
     echo "Selected interfaces:"
     echo "  WAN: ${WAN_INTERFACE}"
     echo "  LAN: ${LAN_INTERFACE}"
@@ -179,6 +225,12 @@ main() {
   log "Ensuring core services are enabled"
   systemctl enable --now chrony
   systemctl enable --now NetworkManager
+
+  log "Ensuring NetworkManager profile exists for LAN interface ${LAN_INTERFACE}"
+  if ! nmcli -g GENERAL.CONNECTION device show "${LAN_INTERFACE}" 2>/dev/null | grep -q .; then
+    nmcli con add type ethernet ifname "${LAN_INTERFACE}" con-name "${LAN_INTERFACE}" >/dev/null 2>&1 || true
+  fi
+  nmcli con up "${LAN_INTERFACE}" >/dev/null 2>&1 || true
 
   clone_or_update_repo
 

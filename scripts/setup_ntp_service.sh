@@ -13,8 +13,8 @@ fi
 USER_NAME="NTP"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
-WAN_INTERFACE="${WAN_INTERFACE:-eth0}"
-LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
+WAN_INTERFACE="${WAN_INTERFACE:-}"
+LAN_INTERFACE="${LAN_INTERFACE:-}"
 WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
 RUNTIME_ENV_FILE="${APP_DIR}/runtime.env"
 
