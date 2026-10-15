@@ -54,9 +54,16 @@ ensure_lan_profile() {
 
   profile="$(nmcli -g GENERAL.CONNECTION device show "${iface}" 2>/dev/null | head -n1 || true)"
   if [[ -z "${profile}" ]]; then
-    echo "Creating NetworkManager profile for ${iface}"
+    profile="$(nmcli -t -f NAME,DEVICE connection show 2>/dev/null | awk -F: -v iface="${iface}" '$2==iface {print $1; exit}')"
+  fi
+
+  if [[ -z "${profile}" ]]; then
+    echo "Creating NetworkManager profile for ${iface}" >&2
     nmcli con add type ethernet ifname "${iface}" con-name "${iface}" >/dev/null 2>&1 || true
-    profile="$(nmcli -g GENERAL.CONNECTION device show "${iface}" 2>/dev/null | head -n1 || true)"
+    profile="$(nmcli -t -f NAME,DEVICE connection show 2>/dev/null | awk -F: -v iface="${iface}" '$2==iface {print $1; exit}')"
+    if [[ -z "${profile}" ]] && nmcli -t -f NAME connection show 2>/dev/null | grep -Fxq "${iface}"; then
+      profile="${iface}"
+    fi
   fi
 
   if [[ -z "${profile}" ]]; then
