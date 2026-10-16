@@ -1,5 +1,7 @@
 import importlib
 import os
+import pathlib
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -24,6 +26,84 @@ class FlaskSandboxTestbench(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"NTP Server Control", response.data)
+
+    def test_root_uses_local_assets_only(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        html = response.data.decode("utf-8")
+
+        for asset_path in (
+            "/static/assets/tailwind.min.js",
+            "/static/assets/fontawesome.css",
+            "/static/assets/site.css",
+        ):
+            self.assertIn(asset_path, html)
+
+        self.assertNotRegex(html, r"https?://")
+        self.assertNotRegex(html, r"cdn")
+
+    def test_static_assets_resolve(self):
+        asset_paths = (
+            "/static/assets/tailwind.min.js",
+            "/static/assets/fontawesome.css",
+            "/static/assets/site.css",
+            "/static/assets/fonts/fa-solid-900.woff2",
+            "/static/assets/fonts/Inter-roman.var.woff2",
+            "/static/assets/fonts/Inter-italic.var.woff2",
+        )
+
+        for asset_path in asset_paths:
+            with self.subTest(asset_path=asset_path):
+                response = self.client.get(asset_path)
+                self.assertEqual(response.status_code, 200)
+
+    def test_static_asset_mime_types(self):
+        css_response = self.client.get("/static/assets/site.css")
+        self.assertIn("text/css", css_response.content_type)
+
+        js_response = self.client.get("/static/assets/tailwind.min.js")
+        self.assertTrue(re.search(r"javascript|ecmascript", js_response.content_type))
+
+    def test_ui_files_do_not_include_remote_assets(self):
+        repo_root = pathlib.Path(__file__).resolve().parents[1]
+        file_patterns = (
+            "templates/*.html",
+            "static/assets/*.css",
+        )
+        remote_pattern = re.compile(r"https?://|cdn\\.", re.IGNORECASE)
+
+        for pattern in file_patterns:
+            for file_path in repo_root.glob(pattern):
+                with self.subTest(file=str(file_path.relative_to(repo_root))):
+                    content = file_path.read_text(encoding="utf-8")
+                    self.assertIsNone(
+                        remote_pattern.search(content),
+                        msg=f"Remote asset reference found in {file_path}",
+                    )
+
+    def test_template_icon_classes_have_local_mappings(self):
+        repo_root = pathlib.Path(__file__).resolve().parents[1]
+        template_content = (repo_root / "templates" / "index.html").read_text(encoding="utf-8")
+        icon_css_content = (repo_root / "static" / "assets" / "fontawesome.css").read_text(encoding="utf-8")
+
+        # Collect icon classes from HTML class attributes only.
+        template_icons = set()
+        class_values = re.findall(r'class\s*=\s*["\']([^"\']+)["\']', template_content)
+        for class_value in class_values:
+            for token in class_value.split():
+                if token.startswith("fa-"):
+                    icon_name = token[3:]
+                    if icon_name not in {"solid", "spin"}:
+                        template_icons.add(icon_name)
+
+        # Collect mapped glyph class names from local icon stylesheet.
+        mapped_icons = set(re.findall(r"\.fa-([a-z0-9-]+)::before", icon_css_content))
+        missing = sorted(template_icons - mapped_icons)
+        self.assertEqual(
+            missing,
+            [],
+            msg=f"Missing local icon mappings for: {', '.join(missing)}",
+        )
 
     def test_system_status(self):
         response = self.client.get("/api/system/status")

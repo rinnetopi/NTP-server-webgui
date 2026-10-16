@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Raspberry Pi NTP Server Network Settings</title>
-    <script src="/static/assets/tailwind.min.js"></script>
-    <link rel="stylesheet" href="/static/assets/fontawesome.css">
-    <link rel="stylesheet" href="/static/assets/site.css">
+    <script src="{{ url_for('static', filename='assets/tailwind.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/fontawesome.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/site.css') }}">
     <style>
         * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -371,11 +371,23 @@
     </div>
 
     <script>
+        function enableIconFallbackIfNeeded() {
+            if (!document.fonts || !document.fonts.check) {
+                document.body.classList.add('no-fa-font');
+                return;
+            }
+            if (!document.fonts.check('900 1em "Font Awesome 6 Free"')) {
+                document.body.classList.add('no-fa-font');
+            }
+        }
+
         const interfaceRoles = {
             wan: 'eth0',
             lan: 'eth1',
             wifi: 'wlan0'
         };
+
+        enableIconFallbackIfNeeded();
 
         function applyInterfaceLabels() {
             document.getElementById('label-wan-summary').innerText = `WAN Source (${interfaceRoles.wan})`;

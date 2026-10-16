@@ -1,22 +1,71 @@
+@font-face {
+  font-family: "Font Awesome 6 Free";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("/static/assets/fonts/fa-solid-900.woff2") format("woff2");
+}
+
 .fa-solid {
+  font-family: "Font Awesome 6 Free", "Segoe UI Symbol", "Apple Color Emoji", sans-serif;
+  font-weight: 900;
   display: inline-block;
   width: 1em;
   text-align: center;
   font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
 }
 
-.fa-clock::before { content: "🕒"; }
-.fa-globe::before { content: "🌐"; }
-.fa-network-wired::before { content: "🔌"; }
-.fa-satellite-dish::before { content: "📡"; }
-.fa-code-branch::before { content: "🌿"; }
-.fa-floppy-disk::before { content: "💾"; }
-.fa-microchip::before { content: "💻"; }
-.fa-temperature-half::before { content: "🌡️"; }
-.fa-arrows-rotate::before { content: "🔄"; }
-.fa-magnifying-glass::before { content: "🔎"; }
-.fa-gear::before { content: "⚙️"; }
-.fa-signal::before { content: "📶"; }
-.fa-wifi::before { content: "📶"; }
-.fa-wifi::before { content: "📶"; }
-.fa-bolt::before { content: "⚡"; }
+.fa-spin {
+  animation: fa-spin 2s infinite linear;
+}
+
+@keyframes fa-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.fa-clock::before { content: "\f017"; }
+.fa-microchip::before { content: "\f2db"; }
+.fa-temperature-half::before { content: "\f2c9"; }
+.fa-globe::before { content: "\f0ac"; }
+.fa-network-wired::before { content: "\f6ff"; }
+.fa-satellite-dish::before { content: "\f7c0"; }
+.fa-code-branch::before { content: "\f126"; }
+.fa-floppy-disk::before { content: "\f0c7"; }
+.fa-wifi::before { content: "\f1eb"; }
+.fa-arrows-rotate::before { content: "\f021"; }
+.fa-chevron-down::before { content: "\f078"; }
+.fa-eye::before { content: "\f06e"; }
+.fa-eye-slash::before { content: "\f070"; }
+.fa-plug::before { content: "\f1e6"; }
+.fa-rotate-right::before { content: "\f2f9"; }
+.fa-arrows-spin::before { content: "\e4bb"; }
+.fa-check::before { content: "\f00c"; }
+.fa-triangle-exclamation::before { content: "\f071"; }
+
+/* Fallback symbols used if local icon font fails to load. */
+.no-fa-font .fa-clock::before { content: "🕒"; }
+.no-fa-font .fa-microchip::before { content: "💻"; }
+.no-fa-font .fa-temperature-half::before { content: "🌡"; }
+.no-fa-font .fa-globe::before { content: "🌐"; }
+.no-fa-font .fa-network-wired::before { content: "🔌"; }
+.no-fa-font .fa-satellite-dish::before { content: "📡"; }
+.no-fa-font .fa-code-branch::before { content: "🌿"; }
+.no-fa-font .fa-floppy-disk::before { content: "💾"; }
+.no-fa-font .fa-wifi::before { content: "📶"; }
+.no-fa-font .fa-arrows-rotate::before { content: "🔄"; }
+.no-fa-font .fa-chevron-down::before { content: "▾"; }
+.no-fa-font .fa-eye::before { content: "👁"; }
+.no-fa-font .fa-eye-slash::before { content: "🙈"; }
+.no-fa-font .fa-plug::before { content: "⚡"; }
+.no-fa-font .fa-rotate-right::before { content: "↻"; }
+.no-fa-font .fa-arrows-spin::before { content: "⟳"; }
+.no-fa-font .fa-check::before { content: "✔"; }
+.no-fa-font .fa-triangle-exclamation::before { content: "⚠"; }

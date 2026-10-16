@@ -26,8 +26,10 @@ The bootstrap script treats `/opt/ntp-server-webgui-src` as a disposable/cacheab
 The web UI is designed to work completely offline. All assets are vendored locally to ensure no external dependencies:
 
 - Tailwind CSS: Local copy included in `static/assets/tailwind.min.js`
-- Font Awesome: Local copy included in `static/assets/fontawesome.css`  
-- Google Fonts: Local fallbacks for Inter font family
+- Font Awesome: Local CSS and webfont files in `static/assets/fontawesome.css` and `static/assets/fonts/fa-solid-900.woff2`
+- Inter font: Local variable font files in `static/assets/fonts/Inter-roman.var.woff2` and `static/assets/fonts/Inter-italic.var.woff2`
+
+The HTML template references these with Flask `url_for('static', filename=...)` helpers to keep paths stable behind reverse proxy setups.
 
 ## API routes
 
