@@ -1,695 +1,695 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raspberry Pi NTP Server Network Settings</title>
-    <script src="{{ url_for('static', filename='assets/tailwind.min.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='assets/fontawesome.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='assets/site.css') }}">
-    <style>
-        * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raspberry Pi NTP Server Network Settings</title>
 
-        body {
-            background-color: #121212;
-            color: #e0e0e0;
-        }
+<style>
+/* Optional: drop Inter-Variable.woff2 into the same folder as this page's static route
+   (or edit the url below). If absent, the system font stack is used. Nothing is fetched remotely. */
+@font-face {
+  font-family: 'Inter'; font-style: normal; font-weight: 300 700; font-display: swap;
+  src: local('Inter'), local('Inter Variable');
+}
 
-        .tactile-card {
-            background: linear-gradient(145deg, #1e1e1e, #161616);
-            box-shadow: 6px 6px 16px #0b0b0b, -6px -6px 16px #1b1b1b;
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            border-radius: 1.25rem;
-        }
+:root { --blue:#1565c0; --blue-dark:#0d47a1; --blue-text:#60a5fa; --gray:#6b7280; --muted:#9ca3af; --rose:#fb7185; }
 
-        .tactile-input {
-            background: #151515;
-            box-shadow: inset 3px 3px 6px #0d0d0d, inset -3px -3px 6px #1d1d1d;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.2s ease;
-        }
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;
+    font-family:'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+html { -webkit-text-size-adjust:100%; }
+body {
+  background:#121212; color:#e0e0e0; min-height:100vh; line-height:1.5;
+  padding:1.5rem 1rem 3rem; display:flex; justify-content:center; align-items:flex-start;
+}
+@media (min-width:640px)  { body { padding-left:1.5rem; padding-right:1.5rem; } }
+@media (min-width:1024px) { body { padding-left:2rem;   padding-right:2rem; } }
+button, input, select { font-size:inherit; color:inherit; }
+button { cursor:pointer; background:none; border:0; }
 
-        .tactile-input:focus {
-            outline: none;
-            border-color: #1565c0;
-            box-shadow: inset 3px 3px 6px #0d0d0d, inset -3px -3px 6px #1d1d1d, 0 0 10px rgba(21, 101, 192, 0.3);
-        }
+/* Icons (inline SVG) */
+.icon { width:1em; height:1em; fill:none; stroke:currentColor; stroke-width:2;
+        stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; vertical-align:-.125em; }
+.spin { animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
 
-        .tactile-btn-primary {
-            background: linear-gradient(145deg, #1565c0, #0d47a1);
-            box-shadow: 4px 4px 12px #0a0a0a, -2px -2px 8px rgba(21, 101, 192, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: all 0.15s ease;
-        }
+/* Layout */
+.wrap { width:100%; max-width:48rem; }
+.wrap > * + * { margin-top:1.5rem; }
+.mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
-        .tactile-btn-primary:active {
-            box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.6), inset -2px -2px 5px rgba(255, 255, 255, 0.15);
-            transform: translateY(2px);
-        }
+.tactile-card {
+  background:linear-gradient(145deg,#1e1e1e,#161616);
+  box-shadow:6px 6px 16px #0b0b0b, -6px -6px 16px #1b1b1b;
+  border:1px solid rgba(255,255,255,.03); border-radius:1.25rem;
+}
 
-        .tactile-btn-secondary {
-            background: linear-gradient(145deg, #222222, #181818);
-            box-shadow: 4px 4px 10px #0b0b0b, -4px -4px 10px #212121;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            transition: all 0.15s ease;
-        }
+/* Header */
+.header { padding:1.25rem; display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:1rem; }
+@media (min-width:640px) { .header { padding:1.5rem; flex-direction:row; } }
+.brand { display:flex; align-items:center; gap:1rem; }
+.logo { width:3rem; height:3rem; border-radius:1rem; background:linear-gradient(135deg,var(--blue),var(--blue-dark));
+        display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem;
+        box-shadow:0 10px 15px -3px rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.1); }
+h1 { font-size:1.25rem; font-weight:700; color:#fff; letter-spacing:.025em; }
+.meta { font-size:.75rem; color:var(--muted); margin-top:.125rem; display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.meta .cpu { color:#60a5fa; } .meta .temp { color:#fbbf24; }
+.meta .icon { font-size:10px; margin-right:.25rem; }
 
-        .tactile-btn-secondary:active {
-            box-shadow: inset 2px 2px 5px #0a0a0a, inset -2px -2px 5px #202020;
-            transform: translateY(2px);
-        }
+.status-badge-online { display:flex; align-items:center; gap:.75rem; padding:.5rem 1rem; border-radius:9999px;
+  background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3); box-shadow:0 0 12px rgba(16,185,129,.25); }
+.status-badge-online .txt { font-size:.75rem; font-weight:600; color:#34d399; text-transform:uppercase; letter-spacing:.05em; }
+.pulse-dot { width:.75rem; height:.75rem; border-radius:50%; background:#10b981; animation:pulse-glow 2s infinite; }
+@keyframes pulse-glow {
+  0% { transform:scale(.95); box-shadow:0 0 0 0 rgba(16,185,129,.7); }
+  70% { transform:scale(1); box-shadow:0 0 0 8px rgba(16,185,129,0); }
+  100% { transform:scale(.95); box-shadow:0 0 0 0 rgba(16,185,129,0); }
+}
 
-        .status-badge-online {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
-        }
+/* Status cards */
+.grid-3 { display:grid; grid-template-columns:1fr; gap:1rem; }
+@media (min-width:640px) { .grid-3 { grid-template-columns:repeat(3,1fr); } }
+.stat { padding:1rem; display:flex; align-items:center; gap:.75rem; }
+.stat-icon { padding:.75rem; border-radius:.75rem; background:rgba(38,38,38,.8); color:#60a5fa; font-size:1.125rem; display:flex; }
+.stat .lbl { font-size:.75rem; color:var(--muted); font-weight:500; }
+.stat .val { font-size:.875rem; font-weight:700; color:#fff; letter-spacing:.025em; }
+.stat .val.trunc { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
 
-        .pulse-dot {
-            animation: pulse-glow 2s infinite;
-        }
+/* Panels */
+.panel { padding:1.5rem; }
+.panel > * + * { margin-top:1.25rem; }
+.panel.tight > * + * { margin-top:1rem; }
+.panel-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem;
+              border-bottom:1px solid rgba(255,255,255,.05); padding-bottom:1rem; }
+.panel-title { display:flex; align-items:center; gap:.75rem; }
+.panel-title > .icon { color:#60a5fa; font-size:1.125rem; }
+h2 { font-size:1rem; font-weight:600; color:#fff; }
+.sub { font-size:.75rem; color:var(--muted); }
 
-        @keyframes pulse-glow {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
+/* Toggle */
+.mode-switch { display:flex; align-items:center; gap:.625rem; flex-shrink:0; }
+.mode-lbl { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--gray); transition:color .2s; }
+.switch { position:relative; display:inline-flex; align-items:center; cursor:pointer; }
+.switch input { position:absolute; opacity:0; width:0; height:0; }
+.track { display:block; width:2.75rem; height:1.5rem; border-radius:9999px; background:#262626;
+         box-shadow:inset 0 2px 4px rgba(0,0,0,.5); position:relative; transition:background .2s; }
+.track::after { content:''; position:absolute; top:2px; left:2px; width:1.25rem; height:1.25rem; border-radius:50%;
+                background:#fff; border:1px solid #d1d5db; transition:transform .2s; }
+.switch input:checked + .track { background:var(--blue); }
+.switch input:checked + .track::after { transform:translateX(100%); border-color:#fff; }
+.switch input:focus-visible + .track { outline:2px solid var(--blue-text); outline-offset:2px; }
 
-        .conditional-section {
-            transition: all 0.3s ease-in-out;
-            max-height: 500px;
-            overflow: hidden;
-            opacity: 1;
-        }
+/* Forms */
+.form > * + * { margin-top:1rem; }
+.field-label { display:block; font-size:.75rem; font-weight:500; color:var(--muted); margin-bottom:.375rem; }
+.field-label.row { display:flex; align-items:center; justify-content:space-between; }
+.link-btn { font-size:.75rem; color:#60a5fa; font-weight:400; display:inline-flex; align-items:center; gap:.25rem; }
+.link-btn:hover { color:#93c5fd; }
+.grid-2 { display:grid; grid-template-columns:1fr; gap:1rem; }
+@media (min-width:640px) { .grid-2 { grid-template-columns:repeat(2,1fr); } .span-2 { grid-column:span 2; } }
 
-        .conditional-section.hidden-section {
-            max-height: 0;
-            opacity: 0;
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            pointer-events: none;
-            border: none !important;
-        }
+.tactile-input { width:100%; padding:.75rem 1rem; border-radius:.75rem; font-size:.875rem; color:#fff; background:#151515;
+  box-shadow:inset 3px 3px 6px #0d0d0d, inset -3px -3px 6px #1d1d1d; border:1px solid rgba(255,255,255,.05); transition:all .2s ease; }
+.tactile-input::placeholder { color:#6b7280; }
+.tactile-input:focus { outline:none; border-color:var(--blue);
+  box-shadow:inset 3px 3px 6px #0d0d0d, inset -3px -3px 6px #1d1d1d, 0 0 10px rgba(21,101,192,.3); }
+select.tactile-input { appearance:none; -webkit-appearance:none; padding-right:2.5rem; cursor:pointer; }
+select.tactile-input option { background:#1a1a1a; color:#fff; }
+.rel { position:relative; }
+.rel .abs-icon { position:absolute; right:1rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:.75rem; pointer-events:none; }
+.rel .abs-btn { position:absolute; right:.875rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:.75rem; display:flex; transition:color .15s; }
+.rel .abs-btn:hover { color:#fff; }
+.rel input.pw { padding-right:2.5rem; }
 
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #121212;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #252525;
-            border-radius: 4px;
-        }
-    </style>
+.conditional-section { transition:all .3s ease-in-out; max-height:500px; overflow:hidden; opacity:1; }
+.conditional-section.hidden-section { max-height:0; opacity:0; margin-top:0 !important; margin-bottom:0 !important;
+  padding-top:0 !important; padding-bottom:0 !important; pointer-events:none; border:none !important; }
+.conditional-section:not(.hidden-section) { padding:4px; margin-left:-4px; margin-right:-4px; }
+
+/* Buttons */
+.actions { padding-top:.5rem; display:flex; flex-direction:column; gap:.75rem; justify-content:flex-end; }
+@media (min-width:640px) { .actions { flex-direction:row; } }
+.btn { width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem; border-radius:.75rem; color:#fff; transition:all .15s ease; user-select:none; }
+@media (min-width:640px) { .btn { width:auto; } }
+.tactile-btn-primary { background:linear-gradient(145deg,#1565c0,#0d47a1); box-shadow:4px 4px 12px #0a0a0a, -2px -2px 8px rgba(21,101,192,.2);
+  border:1px solid rgba(255,255,255,.08); padding:.75rem 1.5rem; font-size:.875rem; font-weight:700; }
+.tactile-btn-primary:active { box-shadow:inset 2px 2px 5px rgba(0,0,0,.6), inset -2px -2px 5px rgba(255,255,255,.15); transform:translateY(2px); }
+.tactile-btn-secondary { background:linear-gradient(145deg,#222,#181818); box-shadow:4px 4px 10px #0b0b0b, -4px -4px 10px #212121;
+  border:1px solid rgba(255,255,255,.04); padding:.75rem 1.25rem; font-size:.875rem; font-weight:600; }
+.tactile-btn-secondary:active { box-shadow:inset 2px 2px 5px #0a0a0a, inset -2px -2px 5px #202020; transform:translateY(2px); }
+.tactile-btn-secondary.danger { color:var(--rose); }
+.tactile-btn-secondary.info { color:#60a5fa; }
+.btn .icon.sm { font-size:.75rem; }
+
+/* Service panel */
+.service { padding:1.5rem; display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:1rem; }
+@media (min-width:640px) { .service { flex-direction:row; } }
+.service h3 { font-size:.875rem; font-weight:700; color:#fff; }
+.service-btns { display:flex; align-items:center; gap:.75rem; width:100%; }
+@media (min-width:640px) { .service-btns { width:auto; } }
+.service-btns .btn { flex:1; padding:.625rem 1rem; font-size:.75rem; }
+@media (min-width:640px) { .service-btns .btn { flex:none; } }
+
+/* Toast */
+#toast { position:fixed; bottom:1.5rem; right:1.5rem; z-index:50; transform:translateY(6rem); opacity:0;
+         pointer-events:none; transition:all .3s; max-width:calc(100vw - 3rem); }
+#toast.show { transform:translateY(0); opacity:1; }
+.toast-inner { display:flex; align-items:center; gap:.75rem; padding:1rem 1.25rem; border-radius:1rem; background:#181818;
+               border:1px solid rgba(59,130,246,.3); box-shadow:0 25px 50px -12px rgba(0,0,0,.6); }
+#toast-icon-bg { width:2rem; height:2rem; border-radius:.75rem; display:flex; align-items:center; justify-content:center;
+                 font-size:.875rem; background:rgba(59,130,246,.2); color:#60a5fa; }
+#toast-icon-bg.alert { background:rgba(244,63,94,.2); color:var(--rose); }
+#toast-title { font-size:.75rem; font-weight:700; color:#fff; }
+#toast-msg { font-size:.75rem; color:var(--muted); }
+
+::-webkit-scrollbar { width:8px; }
+::-webkit-scrollbar-track { background:#121212; }
+::-webkit-scrollbar-thumb { background:#252525; border-radius:4px; }
+</style>
 </head>
-<body class="min-h-screen pb-12 pt-6 px-4 sm:px-6 lg:px-8 flex justify-center items-start">
-    <div class="w-full max-w-3xl space-y-6">
-        <header class="tactile-card p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="flex items-center space-x-4">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1565c0] to-[#0d47a1] flex items-center justify-center text-white shadow-lg text-xl font-bold border border-white/10">
-                    <i class="fa-solid font-mono text-2xl fa-clock"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold text-white tracking-wide">NTP Server Control</h1>
-                    <p class="text-xs text-gray-400 flex flex-wrap items-center gap-2 mt-0.5">
-                        <span>Raspberry Pi 3B+</span> •
-                        <span id="uptime-text">Uptime: Loading...</span> •
-                        <span class="text-blue-400 font-mono"><i class="fa-solid fa-microchip text-[10px] mr-1"></i><span id="cpu-load">--</span></span> •
-                        <span class="text-amber-400 font-mono"><i class="fa-solid fa-temperature-half text-[10px] mr-1"></i><span id="cpu-temp">--°C</span></span>
-                    </p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-3 status-badge-online px-4 py-2 rounded-full">
-                <span class="w-3 h-3 bg-emerald-500 rounded-full pulse-dot"></span>
-                <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider" id="server-status-label">Chrony Active</span>
-            </div>
-        </header>
+<body>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div class="tactile-card p-4 flex items-center space-x-3">
-                <div class="p-3 bg-neutral-800/80 rounded-xl text-blue-400">
-                    <i class="fa-solid fa-globe text-lg"></i>
-                </div>
-                <div>
-                    <p id="label-wan-summary" class="text-xs text-gray-400 font-medium">WAN Source (eth0)</p>
-                    <p class="text-sm font-bold text-white tracking-wide truncate max-w-[150px]" id="disp-wan">DHCP (Active)</p>
-                </div>
-            </div>
-            <div class="tactile-card p-4 flex items-center space-x-3">
-                <div class="p-3 bg-neutral-800/80 rounded-xl text-blue-400">
-                    <i class="fa-solid fa-network-wired text-lg"></i>
-                </div>
-                <div>
-                    <p id="label-lan-summary" class="text-xs text-gray-400 font-medium">LAN Server (eth1)</p>
-                    <p class="text-sm font-bold text-white tracking-wide" id="disp-lan">10.12.0.1 (Static)</p>
-                </div>
-            </div>
-            <div class="tactile-card p-4 flex items-center space-x-3">
-                <div class="p-3 bg-neutral-800/80 rounded-xl text-blue-400">
-                    <i class="fa-solid fa-satellite-dish text-lg"></i>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-400 font-medium">Chrony Stratum</p>
-                    <p class="text-sm font-bold text-white tracking-wide" id="disp-stratum">Stratum 2</p>
-                </div>
-            </div>
-        </div>
+<!-- Inline SVG icon sprite (replaces fontawesome.css) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+    <symbol id="i-temp" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4M5 16v-4h14v4"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+    <symbol id="i-restart" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-reboot" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></symbol>
+  </defs>
+</svg>
 
-        <section class="tactile-card p-6 space-y-4">
-            <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-code-branch text-blue-400 text-lg"></i>
-                <div>
-                    <h2 class="text-base font-semibold text-white">Interface Role Mapping</h2>
-                    <p class="text-xs text-gray-400">Choose which Ethernet adapter is WAN or LAN.</p>
-                </div>
-            </div>
-            <form id="interface-map-form" onsubmit="saveInterfaceMapping(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1.5">WAN Interface</label>
-                    <select id="wan-interface-select" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input appearance-none">
-                        <option value="eth0">eth0</option>
-                        <option value="eth1">eth1</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1.5">LAN Interface</label>
-                    <select id="lan-interface-select" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input appearance-none">
-                        <option value="eth0">eth0</option>
-                        <option value="eth1">eth1</option>
-                    </select>
-                </div>
-                <div class="sm:col-span-2 flex justify-end pt-1">
-                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        <span>Save Interface Mapping</span>
-                    </button>
-                </div>
-            </form>
-        </section>
+<div class="wrap">
 
-        <section class="tactile-card p-6 space-y-5">
-            <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center space-x-3">
-                    <i class="fa-solid fa-globe text-blue-400 text-lg"></i>
-                    <div>
-                        <h2 id="label-wan-title" class="text-base font-semibold text-white">WAN Network Interface (eth0)</h2>
-                        <p class="text-xs text-gray-400">Internet & Upstream NTP Sync</p>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-2.5">
-                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200" id="wan-dhcp-lbl" style="color: #60a5fa;">DHCP</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="wan-dhcp-toggle" class="sr-only peer" onchange="toggleWanMode(this.checked)">
-                        <div class="w-11 h-6 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1565c0] shadow-inner"></div>
-                    </label>
-                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200 text-gray-500" id="wan-static-lbl">Static</span>
-                </div>
-            </div>
-            <form id="wan-form" onsubmit="saveWanSettings(event)" class="space-y-4">
-                <div id="wan-static-fields" class="conditional-section hidden-section space-y-4 pt-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Static IPv4 Address</label>
-                            <input type="text" id="wan-input-ip" value="192.168.1.150" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Subnet Mask</label>
-                            <input type="text" id="wan-input-subnet" value="255.255.255.0" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                        </div>
-                    </div>
-                </div>
-                <div class="pt-2 flex justify-end">
-                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        <span>Apply WAN Settings</span>
-                    </button>
-                </div>
-            </form>
-        </section>
-
-        <section class="tactile-card p-6 space-y-5">
-            <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center space-x-3">
-                    <i class="fa-solid fa-wifi text-blue-400 text-lg"></i>
-                    <div>
-                        <h2 id="label-wifi-title" class="text-base font-semibold text-white">Wireless Configuration (wlan0)</h2>
-                        <p class="text-xs text-gray-400">Alternative Upstream Internet</p>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-2.5">
-                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200" id="wifi-dhcp-lbl" style="color: #60a5fa;">DHCP</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="wifi-dhcp-toggle" class="sr-only peer" onchange="toggleWifiMode(this.checked)">
-                        <div class="w-11 h-6 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1565c0] shadow-inner"></div>
-                    </label>
-                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200 text-gray-500" id="wifi-static-lbl">Static</span>
-                </div>
-            </div>
-            <form id="wifi-form" onsubmit="saveWifiSettings(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1.5 flex items-center justify-between">
-                        <span>Wi-Fi Network (SSID)</span>
-                        <button type="button" onclick="scanWifiNetworks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-normal">
-                            <i class="fa-solid fa-arrows-rotate" id="scan-wifi-icon"></i> Scan Networks
-                        </button>
-                    </label>
-                    <div class="relative">
-                        <select id="wifi-ssid-select" onchange="onWifiSelectChange(this.value)" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input appearance-none pr-10 cursor-pointer">
-                            <option value="" disabled selected>Select scanned network...</option>
-                        </select>
-                        <i class="fa-solid fa-chevron-down text-gray-400 absolute right-4 top-4 text-xs pointer-events-none"></i>
-                    </div>
-                </div>
-                <div id="custom-ssid-box" class="hidden-section conditional-section">
-                    <label class="block text-xs font-medium text-gray-400 mb-1.5">Custom SSID Name</label>
-                    <input type="text" id="wifi-input-custom-ssid" placeholder="Enter network name..." class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1.5">WPA2/WPA3 Password</label>
-                    <div class="relative">
-                        <input type="password" id="input-wifi-pass" placeholder="Enter wireless password" required class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input pr-10">
-                        <button type="button" onclick="togglePasswordVisibility('input-wifi-pass', 'pass-icon')" class="absolute right-3.5 top-3.5 text-gray-400 hover:text-white transition">
-                            <i class="fa-solid fa-eye text-xs" id="pass-icon"></i>
-                        </button>
-                    </div>
-                </div>
-                <div id="wifi-static-fields" class="conditional-section hidden-section space-y-4 pt-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Static IPv4 Address</label>
-                            <input type="text" id="wifi-input-ip" value="192.168.1.180" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Subnet Mask</label>
-                            <input type="text" id="wifi-input-subnet" value="255.255.255.0" class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                        </div>
-                    </div>
-                </div>
-                <div class="pt-2 flex justify-end">
-                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-plug text-xs"></i>
-                        <span>Connect & Save Wi-Fi</span>
-                    </button>
-                </div>
-            </form>
-        </section>
-
-        <section class="tactile-card p-6 space-y-5">
-            <div class="flex items-center justify-between border-b border-white/5 pb-4">
-                <div class="flex items-center space-x-3">
-                    <i class="fa-solid fa-network-wired text-blue-400 text-lg"></i>
-                    <div>
-                        <h2 id="label-lan-title" class="text-base font-semibold text-white">LAN Server Interface (eth1)</h2>
-                        <p class="text-xs text-gray-400">Closed Local Network (No Internet / No Gateway / No DNS)</p>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-2.5">
-                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200 text-gray-500" id="lan-dhcp-lbl">DHCP</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="lan-dhcp-toggle" class="sr-only peer" checked onchange="toggleLanMode(this.checked)">
-                        <div class="w-11 h-6 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1565c0] shadow-inner"></div>
-                    </label>
-                    <span class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200" id="lan-static-lbl" style="color: #60a5fa;">Static</span>
-                </div>
-            </div>
-            <form id="lan-form" onsubmit="saveLanSettings(event)" class="space-y-4">
-                <div id="lan-static-fields" class="conditional-section space-y-4 pt-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1.5">LAN Server Static IPv4</label>
-                            <input type="text" id="lan-input-ip" value="10.12.0.1" required class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Subnet Mask</label>
-                            <input type="text" id="lan-input-subnet" value="255.255.0.0" required class="w-full px-4 py-3 rounded-xl text-sm text-white tactile-input">
-                        </div>
-                    </div>
-                </div>
-                <div class="pt-2 flex justify-end">
-                    <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white tactile-btn-primary flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        <span>Apply LAN Settings</span>
-                    </button>
-                </div>
-            </form>
-        </section>
-
-        <section class="tactile-card p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-                <h3 class="text-sm font-bold text-white">NTP Service Daemon Control</h3>
-                <p class="text-xs text-gray-400">Restart chrony NTP server or reboot Raspberry Pi.</p>
-            </div>
-            <div class="flex items-center space-x-3 w-full sm:w-auto">
-                <button onclick="triggerServiceAction('restart')" class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-semibold text-blue-400 tactile-btn-secondary flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-rotate-right"></i>
-                    <span>Restart Chrony</span>
-                </button>
-                <button onclick="triggerServiceAction('reboot')" class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-400 tactile-btn-secondary flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-arrows-spin"></i>
-                    <span>Reboot Pi</span>
-                </button>
-            </div>
-        </section>
+  <header class="tactile-card header">
+    <div class="brand">
+      <div class="logo"><svg class="icon"><use href="#i-clock"/></svg></div>
+      <div>
+        <h1>NTP Server Control</h1>
+        <p class="meta">
+          <span>Raspberry Pi 3B+</span> •
+          <span id="uptime-text">Uptime: Loading...</span> •
+          <span class="cpu mono"><svg class="icon"><use href="#i-cpu"/></svg><span id="cpu-load">--</span></span> •
+          <span class="temp mono"><svg class="icon"><use href="#i-temp"/></svg><span id="cpu-temp">--°C</span></span>
+        </p>
+      </div>
     </div>
-
-    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none z-50">
-        <div class="tactile-card border border-blue-500/30 px-5 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 bg-[#181818]">
-            <div id="toast-icon-bg" class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                <i id="toast-icon" class="fa-solid fa-check text-sm"></i>
-            </div>
-            <div>
-                <h4 id="toast-title" class="text-xs font-bold text-white">Success</h4>
-                <p id="toast-msg" class="text-xs text-gray-400">Settings applied successfully.</p>
-            </div>
-        </div>
+    <div class="status-badge-online">
+      <span class="pulse-dot"></span>
+      <span class="txt" id="server-status-label">Chrony Active</span>
     </div>
+  </header>
 
-    <script>
-        function enableIconFallbackIfNeeded() {
-            if (!document.fonts || !document.fonts.check) {
-                document.body.classList.add('no-fa-font');
-                return;
+  <div class="grid-3">
+    <div class="tactile-card stat">
+      <div class="stat-icon"><svg class="icon"><use href="#i-globe"/></svg></div>
+      <div>
+        <p id="label-wan-summary" class="lbl">WAN Source (eth0)</p>
+        <p class="val trunc" id="disp-wan">DHCP (Active)</p>
+      </div>
+    </div>
+    <div class="tactile-card stat">
+      <div class="stat-icon"><svg class="icon"><use href="#i-network"/></svg></div>
+      <div>
+        <p id="label-lan-summary" class="lbl">LAN Server (eth1)</p>
+        <p class="val" id="disp-lan">10.12.0.1 (Static)</p>
+      </div>
+    </div>
+    <div class="tactile-card stat">
+      <div class="stat-icon"><svg class="icon"><use href="#i-radio"/></svg></div>
+      <div>
+        <p class="lbl">Chrony Stratum</p>
+        <p class="val" id="disp-stratum">Stratum 2</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interface role mapping -->
+  <section class="tactile-card panel tight">
+    <div class="panel-title">
+      <svg class="icon"><use href="#i-branch"/></svg>
+      <div>
+        <h2>Interface Role Mapping</h2>
+        <p class="sub">Choose which Ethernet adapter is WAN or LAN.</p>
+      </div>
+    </div>
+    <form id="interface-map-form" onsubmit="saveInterfaceMapping(event)" class="grid-2">
+      <div>
+        <label class="field-label">WAN Interface</label>
+        <div class="rel">
+          <select id="wan-interface-select" class="tactile-input">
+            <option value="eth0">eth0</option>
+            <option value="eth1">eth1</option>
+          </select>
+          <svg class="icon abs-icon"><use href="#i-chevron"/></svg>
+        </div>
+      </div>
+      <div>
+        <label class="field-label">LAN Interface</label>
+        <div class="rel">
+          <select id="lan-interface-select" class="tactile-input">
+            <option value="eth0">eth0</option>
+            <option value="eth1">eth1</option>
+          </select>
+          <svg class="icon abs-icon"><use href="#i-chevron"/></svg>
+        </div>
+      </div>
+      <div class="span-2 actions" style="padding-top:.25rem">
+        <button type="submit" class="btn tactile-btn-primary">
+          <svg class="icon"><use href="#i-save"/></svg><span>Save Interface Mapping</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- WAN -->
+  <section class="tactile-card panel">
+    <div class="panel-head">
+      <div class="panel-title">
+        <svg class="icon"><use href="#i-globe"/></svg>
+        <div>
+          <h2 id="label-wan-title">WAN Network Interface (eth0)</h2>
+          <p class="sub">Internet &amp; Upstream NTP Sync</p>
+        </div>
+      </div>
+      <div class="mode-switch">
+        <span class="mode-lbl" id="wan-dhcp-lbl" style="color:#60a5fa">DHCP</span>
+        <label class="switch">
+          <input type="checkbox" id="wan-dhcp-toggle" onchange="toggleWanMode(this.checked)">
+          <span class="track"></span>
+        </label>
+        <span class="mode-lbl" id="wan-static-lbl">Static</span>
+      </div>
+    </div>
+    <form id="wan-form" class="form" onsubmit="saveWanSettings(event)">
+      <div id="wan-static-fields" class="conditional-section hidden-section">
+        <div class="grid-2">
+          <div>
+            <label class="field-label">Static IPv4 Address</label>
+            <input type="text" id="wan-input-ip" value="192.168.1.150" class="tactile-input">
+          </div>
+          <div>
+            <label class="field-label">Subnet Mask</label>
+            <input type="text" id="wan-input-subnet" value="255.255.255.0" class="tactile-input">
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn tactile-btn-primary">
+          <svg class="icon"><use href="#i-save"/></svg><span>Apply WAN Settings</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Wi-Fi -->
+  <section class="tactile-card panel">
+    <div class="panel-head">
+      <div class="panel-title">
+        <svg class="icon"><use href="#i-wifi"/></svg>
+        <div>
+          <h2 id="label-wifi-title">Wireless Configuration (wlan0)</h2>
+          <p class="sub">Alternative Upstream Internet</p>
+        </div>
+      </div>
+      <div class="mode-switch">
+        <span class="mode-lbl" id="wifi-dhcp-lbl" style="color:#60a5fa">DHCP</span>
+        <label class="switch">
+          <input type="checkbox" id="wifi-dhcp-toggle" onchange="toggleWifiMode(this.checked)">
+          <span class="track"></span>
+        </label>
+        <span class="mode-lbl" id="wifi-static-lbl">Static</span>
+      </div>
+    </div>
+    <form id="wifi-form" class="form" onsubmit="saveWifiSettings(event)">
+      <div>
+        <label class="field-label row">
+          <span>Wi-Fi Network (SSID)</span>
+          <button type="button" class="link-btn" onclick="scanWifiNetworks()">
+            <svg class="icon" id="scan-wifi-icon"><use href="#i-refresh"/></svg> Scan Networks
+          </button>
+        </label>
+        <div class="rel">
+          <select id="wifi-ssid-select" class="tactile-input" onchange="onWifiSelectChange(this.value)">
+            <option value="" disabled selected>Select scanned network...</option>
+          </select>
+          <svg class="icon abs-icon"><use href="#i-chevron"/></svg>
+        </div>
+      </div>
+      <div id="custom-ssid-box" class="hidden-section conditional-section">
+        <label class="field-label">Custom SSID Name</label>
+        <input type="text" id="wifi-input-custom-ssid" placeholder="Enter network name..." class="tactile-input">
+      </div>
+      <div>
+        <label class="field-label">WPA2/WPA3 Password</label>
+        <div class="rel">
+          <input type="password" id="input-wifi-pass" placeholder="Enter wireless password" required class="tactile-input pw">
+          <button type="button" class="abs-btn" onclick="togglePasswordVisibility('input-wifi-pass','pass-icon')" aria-label="Show or hide password">
+            <svg class="icon" id="pass-icon"><use href="#i-eye"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="wifi-static-fields" class="conditional-section hidden-section">
+        <div class="grid-2">
+          <div>
+            <label class="field-label">Static IPv4 Address</label>
+            <input type="text" id="wifi-input-ip" value="192.168.1.180" class="tactile-input">
+          </div>
+          <div>
+            <label class="field-label">Subnet Mask</label>
+            <input type="text" id="wifi-input-subnet" value="255.255.255.0" class="tactile-input">
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn tactile-btn-primary">
+          <svg class="icon sm"><use href="#i-plug"/></svg><span>Connect &amp; Save Wi-Fi</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- LAN -->
+  <section class="tactile-card panel">
+    <div class="panel-head">
+      <div class="panel-title">
+        <svg class="icon"><use href="#i-network"/></svg>
+        <div>
+          <h2 id="label-lan-title">LAN Server Interface (eth1)</h2>
+          <p class="sub">Closed Local Network (No Internet / No Gateway / No DNS)</p>
+        </div>
+      </div>
+      <div class="mode-switch">
+        <span class="mode-lbl" id="lan-dhcp-lbl">DHCP</span>
+        <label class="switch">
+          <input type="checkbox" id="lan-dhcp-toggle" checked onchange="toggleLanMode(this.checked)">
+          <span class="track"></span>
+        </label>
+        <span class="mode-lbl" id="lan-static-lbl" style="color:#60a5fa">Static</span>
+      </div>
+    </div>
+    <form id="lan-form" class="form" onsubmit="saveLanSettings(event)">
+      <div id="lan-static-fields" class="conditional-section">
+        <div class="grid-2">
+          <div>
+            <label class="field-label">LAN Server Static IPv4</label>
+            <input type="text" id="lan-input-ip" value="10.12.0.1" required class="tactile-input">
+          </div>
+          <div>
+            <label class="field-label">Subnet Mask</label>
+            <input type="text" id="lan-input-subnet" value="255.255.0.0" required class="tactile-input">
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn tactile-btn-primary">
+          <svg class="icon"><use href="#i-save"/></svg><span>Apply LAN Settings</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Service control -->
+  <section class="tactile-card service">
+    <div>
+      <h3>NTP Service Daemon Control</h3>
+      <p class="sub">Restart chrony NTP server or reboot Raspberry Pi.</p>
+    </div>
+    <div class="service-btns">
+      <button class="btn tactile-btn-secondary info" onclick="triggerServiceAction('restart')">
+        <svg class="icon"><use href="#i-restart"/></svg><span>Restart Chrony</span>
+      </button>
+      <button class="btn tactile-btn-secondary danger" onclick="triggerServiceAction('reboot')">
+        <svg class="icon"><use href="#i-reboot"/></svg><span>Reboot Pi</span>
+      </button>
+    </div>
+  </section>
+</div>
+
+<div id="toast">
+  <div class="toast-inner">
+    <div id="toast-icon-bg"><svg class="icon" id="toast-icon"><use href="#i-check"/></svg></div>
+    <div>
+      <h4 id="toast-title">Success</h4>
+      <p id="toast-msg">Settings applied successfully.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+    const interfaceRoles = { wan: 'eth0', lan: 'eth1', wifi: 'wlan0' };
+
+    function applyInterfaceLabels() {
+        document.getElementById('label-wan-summary').innerText = `WAN Source (${interfaceRoles.wan})`;
+        document.getElementById('label-lan-summary').innerText = `LAN Server (${interfaceRoles.lan})`;
+        document.getElementById('label-wan-title').innerText = `WAN Network Interface (${interfaceRoles.wan})`;
+        document.getElementById('label-lan-title').innerText = `LAN Server Interface (${interfaceRoles.lan})`;
+        document.getElementById('label-wifi-title').innerText = `Wireless Configuration (${interfaceRoles.wifi})`;
+
+        document.getElementById('wan-interface-select').value = interfaceRoles.wan;
+        document.getElementById('lan-interface-select').value = interfaceRoles.lan;
+    }
+
+    async function loadInterfaceMapping() {
+        try {
+            const res = await fetch('/api/network/interfaces');
+            const data = await res.json();
+            if (data.success && data.mapping) {
+                interfaceRoles.wan = data.mapping.wan || interfaceRoles.wan;
+                interfaceRoles.lan = data.mapping.lan || interfaceRoles.lan;
+                interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
+                applyInterfaceLabels();
             }
-            if (!document.fonts.check('900 1em "Font Awesome 6 Free"')) {
-                document.body.classList.add('no-fa-font');
-            }
+        } catch (error) {
+            showToast('Mapping Error', 'Could not load interface mapping.', true);
+        }
+    }
+
+    async function saveInterfaceMapping(event) {
+        event.preventDefault();
+        const wan = document.getElementById('wan-interface-select').value;
+        const lan = document.getElementById('lan-interface-select').value;
+        if (wan === lan) {
+            showToast('Mapping Error', 'WAN and LAN must be different interfaces.', true);
+            return;
         }
 
-        const interfaceRoles = {
-            wan: 'eth0',
-            lan: 'eth1',
-            wifi: 'wlan0'
+        try {
+            const res = await fetch('/api/network/interfaces', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ wan, lan, wifi: interfaceRoles.wifi })
+            });
+            const data = await res.json();
+            if (data.success && data.mapping) {
+                interfaceRoles.wan = data.mapping.wan;
+                interfaceRoles.lan = data.mapping.lan;
+                interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
+                applyInterfaceLabels();
+                showToast('Mapping Saved', `WAN=${interfaceRoles.wan}, LAN=${interfaceRoles.lan}`);
+            } else {
+                showToast('Mapping Error', data.error || 'Failed to save mapping.', true);
+            }
+        } catch (error) {
+            showToast('Mapping Error', 'Failed to save mapping.', true);
+        }
+    }
+
+    async function fetchSystemStatus() {
+        try {
+            const res = await fetch('/api/system/status');
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('uptime-text').innerText = `Uptime: ${data.uptime}`;
+                document.getElementById('cpu-load').innerText = data.load.join(', ');
+                document.getElementById('cpu-temp').innerText = `${data.temperature}°C`;
+                document.getElementById('disp-stratum').innerText = `Stratum ${data.stratum}`;
+                document.getElementById('server-status-label').innerText = data.chrony_active ? 'Chrony Active' : 'Chrony Inactive';
+            }
+        } catch (error) {
+            console.error("Failed to fetch system status:", error);
+        }
+    }
+    setInterval(fetchSystemStatus, 5000);
+    fetchSystemStatus();
+    loadInterfaceMapping();
+
+    function setMode(prefix, isStatic) {
+        document.getElementById(prefix + '-static-fields').classList.toggle('hidden-section', !isStatic);
+        document.getElementById(prefix + '-dhcp-lbl').style.color   = isStatic ? '#6b7280' : '#60a5fa';
+        document.getElementById(prefix + '-static-lbl').style.color = isStatic ? '#60a5fa' : '#6b7280';
+    }
+    function toggleWanMode(isStatic)  { setMode('wan',  isStatic); }
+    function toggleWifiMode(isStatic) { setMode('wifi', isStatic); }
+    function toggleLanMode(isStatic)  { setMode('lan',  isStatic); }
+
+    function onWifiSelectChange(value) {
+        document.getElementById('custom-ssid-box').classList.toggle('hidden-section', value !== 'custom');
+    }
+
+    async function scanWifiNetworks() {
+        const icon = document.getElementById('scan-wifi-icon');
+        icon.classList.add('spin');
+        try {
+            const res = await fetch('/api/network/wifi/scan');
+            const data = await res.json();
+            if (data.success) {
+                const select = document.getElementById('wifi-ssid-select');
+                select.innerHTML = '<option value="" disabled selected>Select scanned network...</option>';
+                data.networks.forEach(network => {
+                    const option = document.createElement('option');
+                    option.value = network.ssid;
+                    option.innerText = `${network.ssid} (Signal: ${network.signal}%)`;
+                    select.appendChild(option);
+                });
+                const customOption = document.createElement('option');
+                customOption.value = 'custom';
+                customOption.innerText = '-- Enter custom SSID manually --';
+                select.appendChild(customOption);
+                showToast("Wi-Fi Scan Complete", `Found ${data.networks.length} networks.`);
+            } else {
+                showToast("Scan Error", data.error || "Could not scan wireless networks.", true);
+            }
+        } catch (error) {
+            showToast("Scan Error", "Could not scan wireless networks.", true);
+        } finally {
+            icon.classList.remove('spin');
+        }
+    }
+
+    function togglePasswordVisibility(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const use = document.querySelector('#' + iconId + ' use');
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        use.setAttribute('href', show ? '#i-eye-off' : '#i-eye');
+    }
+
+    async function saveWanSettings(event) {
+        event.preventDefault();
+        const isStatic = document.getElementById('wan-dhcp-toggle').checked;
+        const payload = {
+            mode: isStatic ? 'static' : 'dhcp',
+            ip: document.getElementById('wan-input-ip').value,
+            subnet: document.getElementById('wan-input-subnet').value
         };
-
-        enableIconFallbackIfNeeded();
-
-        function applyInterfaceLabels() {
-            document.getElementById('label-wan-summary').innerText = `WAN Source (${interfaceRoles.wan})`;
-            document.getElementById('label-lan-summary').innerText = `LAN Server (${interfaceRoles.lan})`;
-            document.getElementById('label-wan-title').innerText = `WAN Network Interface (${interfaceRoles.wan})`;
-            document.getElementById('label-lan-title').innerText = `LAN Server Interface (${interfaceRoles.lan})`;
-            document.getElementById('label-wifi-title').innerText = `Wireless Configuration (${interfaceRoles.wifi})`;
-
-            document.getElementById('wan-interface-select').value = interfaceRoles.wan;
-            document.getElementById('lan-interface-select').value = interfaceRoles.lan;
-        }
-
-        async function loadInterfaceMapping() {
-            try {
-                const res = await fetch('/api/network/interfaces');
-                const data = await res.json();
-                if (data.success && data.mapping) {
-                    interfaceRoles.wan = data.mapping.wan || interfaceRoles.wan;
-                    interfaceRoles.lan = data.mapping.lan || interfaceRoles.lan;
-                    interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
-                    applyInterfaceLabels();
-                }
-            } catch (error) {
-                showToast('Mapping Error', 'Could not load interface mapping.', true);
-            }
-        }
-
-        async function saveInterfaceMapping(event) {
-            event.preventDefault();
-            const wan = document.getElementById('wan-interface-select').value;
-            const lan = document.getElementById('lan-interface-select').value;
-            if (wan === lan) {
-                showToast('Mapping Error', 'WAN and LAN must be different interfaces.', true);
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/network/interfaces', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ wan, lan, wifi: interfaceRoles.wifi })
-                });
-                const data = await res.json();
-                if (data.success && data.mapping) {
-                    interfaceRoles.wan = data.mapping.wan;
-                    interfaceRoles.lan = data.mapping.lan;
-                    interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
-                    applyInterfaceLabels();
-                    showToast('Mapping Saved', `WAN=${interfaceRoles.wan}, LAN=${interfaceRoles.lan}`);
-                } else {
-                    showToast('Mapping Error', data.error || 'Failed to save mapping.', true);
-                }
-            } catch (error) {
-                showToast('Mapping Error', 'Failed to save mapping.', true);
-            }
-        }
-
-        async function fetchSystemStatus() {
-            try {
-                const res = await fetch('/api/system/status');
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('uptime-text').innerText = `Uptime: ${data.uptime}`;
-                    document.getElementById('cpu-load').innerText = data.load.join(', ');
-                    document.getElementById('cpu-temp').innerText = `${data.temperature}°C`;
-                    document.getElementById('disp-stratum').innerText = `Stratum ${data.stratum}`;
-                    document.getElementById('server-status-label').innerText = data.chrony_active ? 'Chrony Active' : 'Chrony Inactive';
-                }
-            } catch (error) {
-                console.error("Failed to fetch system status:", error);
-            }
-        }
-        setInterval(fetchSystemStatus, 5000);
-        fetchSystemStatus();
-        loadInterfaceMapping();
-
-        function toggleWanMode(isStatic) {
-            const staticFields = document.getElementById('wan-static-fields');
-            const dhcpLbl = document.getElementById('wan-dhcp-lbl');
-            const staticLbl = document.getElementById('wan-static-lbl');
-            if (isStatic) {
-                staticFields.classList.remove('hidden-section');
-                dhcpLbl.style.color = '#6b7280';
-                staticLbl.style.color = '#60a5fa';
+        try {
+            const res = await fetch('/api/network/wan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('disp-wan').innerText = isStatic ? payload.ip : "DHCP (Active)";
+                showToast("WAN Saved", `${interfaceRoles.wan} network configuration applied.`);
             } else {
-                staticFields.classList.add('hidden-section');
-                dhcpLbl.style.color = '#60a5fa';
-                staticLbl.style.color = '#6b7280';
+                showToast("Error", data.error || "Failed to update WAN.", true);
             }
+        } catch (error) {
+            showToast("Network Error", "Could not communicate with Flask backend.", true);
         }
+    }
 
-        function toggleWifiMode(isStatic) {
-            const staticFields = document.getElementById('wifi-static-fields');
-            const dhcpLbl = document.getElementById('wifi-dhcp-lbl');
-            const staticLbl = document.getElementById('wifi-static-lbl');
-            if (isStatic) {
-                staticFields.classList.remove('hidden-section');
-                dhcpLbl.style.color = '#6b7280';
-                staticLbl.style.color = '#60a5fa';
+    async function saveWifiSettings(event) {
+        event.preventDefault();
+        const select = document.getElementById('wifi-ssid-select');
+        const ssid = select.value === 'custom'
+            ? document.getElementById('wifi-input-custom-ssid').value
+            : select.value;
+        const payload = {
+            mode: document.getElementById('wifi-dhcp-toggle').checked ? 'static' : 'dhcp',
+            ssid: ssid,
+            password: document.getElementById('input-wifi-pass').value,
+            ip: document.getElementById('wifi-input-ip').value,
+            subnet: document.getElementById('wifi-input-subnet').value
+        };
+        try {
+            const res = await fetch('/api/network/wifi', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast("Wi-Fi Connected", `Successfully connected to ${ssid}`);
             } else {
-                staticFields.classList.add('hidden-section');
-                dhcpLbl.style.color = '#60a5fa';
-                staticLbl.style.color = '#6b7280';
+                showToast("Wi-Fi Error", data.error || "Connection failed.", true);
             }
+        } catch (error) {
+            showToast("Error", "Failed to connect to wireless.", true);
         }
+    }
 
-        function toggleLanMode(isStatic) {
-            const staticFields = document.getElementById('lan-static-fields');
-            const dhcpLbl = document.getElementById('lan-dhcp-lbl');
-            const staticLbl = document.getElementById('lan-static-lbl');
-            if (isStatic) {
-                staticFields.classList.remove('hidden-section');
-                dhcpLbl.style.color = '#6b7280';
-                staticLbl.style.color = '#60a5fa';
+    async function saveLanSettings(event) {
+        event.preventDefault();
+        const payload = {
+            ip: document.getElementById('lan-input-ip').value,
+            subnet: document.getElementById('lan-input-subnet').value
+        };
+        try {
+            const res = await fetch('/api/network/lan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('disp-lan').innerText = `${payload.ip} (Static)`;
+                showToast("LAN Saved", `${interfaceRoles.lan} NTP server IP updated.`);
             } else {
-                staticFields.classList.add('hidden-section');
-                dhcpLbl.style.color = '#60a5fa';
-                staticLbl.style.color = '#6b7280';
+                showToast("Error", data.error, true);
             }
+        } catch (error) {
+            showToast("Error", "Failed to save LAN settings.", true);
         }
+    }
 
-        function onWifiSelectChange(value) {
-            const customBox = document.getElementById('custom-ssid-box');
-            if (value === 'custom') {
-                customBox.classList.remove('hidden-section');
+    async function triggerServiceAction(action) {
+        try {
+            const endpoint = action === 'reboot' ? '/api/service/reboot' : '/api/service/ntp';
+            const payload = action === 'reboot' ? {} : { action: 'restart' };
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(action === 'reboot' ? "Rebooting Pi" : "Chrony Restarted", data.message);
             } else {
-                customBox.classList.add('hidden-section');
+                showToast("Action Failed", data.error, true);
             }
+        } catch (error) {
+            showToast("Error", "Service command failed.", true);
         }
+    }
 
-        async function scanWifiNetworks() {
-            const icon = document.getElementById('scan-wifi-icon');
-            icon.classList.add('fa-spin');
-            try {
-                const res = await fetch('/api/network/wifi/scan');
-                const data = await res.json();
-                if (data.success) {
-                    const select = document.getElementById('wifi-ssid-select');
-                    select.innerHTML = '<option value="" disabled selected>Select scanned network...</option>';
-                    data.networks.forEach(network => {
-                        const option = document.createElement('option');
-                        option.value = network.ssid;
-                        option.innerText = `${network.ssid} (Signal: ${network.signal}%)`;
-                        select.appendChild(option);
-                    });
-                    const customOption = document.createElement('option');
-                    customOption.value = 'custom';
-                    customOption.innerText = '-- Enter custom SSID manually --';
-                    select.appendChild(customOption);
-                    showToast("Wi-Fi Scan Complete", `Found ${data.networks.length} networks.`);
-                } else {
-                    showToast("Scan Error", data.error || "Could not scan wireless networks.", true);
-                }
-            } catch (error) {
-                showToast("Scan Error", "Could not scan wireless networks.", true);
-            } finally {
-                icon.classList.remove('fa-spin');
-            }
-        }
-
-        function togglePasswordVisibility(inputId, iconId) {
-            const input = document.getElementById(inputId);
-            const icon = document.getElementById(iconId);
-            if (input.type === "password") {
-                input.type = "text";
-                icon.classList.remove("fa-eye");
-                icon.classList.add("fa-eye-slash");
-            } else {
-                input.type = "password";
-                icon.classList.remove("fa-eye-slash");
-                icon.classList.add("fa-eye");
-            }
-        }
-
-        async function saveWanSettings(event) {
-            event.preventDefault();
-            const isStatic = document.getElementById('wan-dhcp-toggle').checked;
-            const payload = {
-                mode: isStatic ? 'static' : 'dhcp',
-                ip: document.getElementById('wan-input-ip').value,
-                subnet: document.getElementById('wan-input-subnet').value
-            };
-            try {
-                const res = await fetch('/api/network/wan', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('disp-wan').innerText = isStatic ? payload.ip : "DHCP (Active)";
-                    showToast("WAN Saved", `${interfaceRoles.wan} network configuration applied.`);
-                } else {
-                    showToast("Error", data.error || "Failed to update WAN.", true);
-                }
-            } catch (error) {
-                showToast("Network Error", "Could not communicate with Flask backend.", true);
-            }
-        }
-
-        async function saveWifiSettings(event) {
-            event.preventDefault();
-            const select = document.getElementById('wifi-ssid-select');
-            const ssid = select.value === 'custom'
-                ? document.getElementById('wifi-input-custom-ssid').value
-                : select.value;
-            const payload = {
-                mode: document.getElementById('wifi-dhcp-toggle').checked ? 'static' : 'dhcp',
-                ssid: ssid,
-                password: document.getElementById('input-wifi-pass').value,
-                ip: document.getElementById('wifi-input-ip').value,
-                subnet: document.getElementById('wifi-input-subnet').value
-            };
-            try {
-                const res = await fetch('/api/network/wifi', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast("Wi-Fi Connected", `Successfully connected to ${ssid}`);
-                } else {
-                    showToast("Wi-Fi Error", data.error || "Connection failed.", true);
-                }
-            } catch (error) {
-                showToast("Error", "Failed to connect to wireless.", true);
-            }
-        }
-
-        async function saveLanSettings(event) {
-            event.preventDefault();
-            const payload = {
-                ip: document.getElementById('lan-input-ip').value,
-                subnet: document.getElementById('lan-input-subnet').value
-            };
-            try {
-                const res = await fetch('/api/network/lan', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('disp-lan').innerText = `${payload.ip} (Static)`;
-                    showToast("LAN Saved", `${interfaceRoles.lan} NTP server IP updated.`);
-                } else {
-                    showToast("Error", data.error, true);
-                }
-            } catch (error) {
-                showToast("Error", "Failed to save LAN settings.", true);
-            }
-        }
-
-        async function triggerServiceAction(action) {
-            try {
-                const endpoint = action === 'reboot' ? '/api/service/reboot' : '/api/service/ntp';
-                const payload = action === 'reboot' ? {} : { action: 'restart' };
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(action === 'reboot' ? "Rebooting Pi" : "Chrony Restarted", data.message);
-                } else {
-                    showToast("Action Failed", data.error, true);
-                }
-            } catch (error) {
-                showToast("Error", "Service command failed.", true);
-            }
-        }
-
-        let toastTimeout;
-        function showToast(title, message, isAlert = false) {
-            const toast = document.getElementById('toast');
-            const toastTitle = document.getElementById('toast-title');
-            const toastMsg = document.getElementById('toast-msg');
-            const toastIconBg = document.getElementById('toast-icon-bg');
-            const toastIcon = document.getElementById('toast-icon');
-
-            toastTitle.innerText = title;
-            toastMsg.innerText = message;
-
-            if (isAlert) {
-                toastIconBg.className = "w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center";
-                toastIcon.className = "fa-solid fa-triangle-exclamation text-sm";
-            } else {
-                toastIconBg.className = "w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center";
-                toastIcon.className = "fa-solid fa-check text-sm";
-            }
-
-            toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
-            toast.classList.add('translate-y-0', 'opacity-100');
-
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toast.classList.remove('translate-y-0', 'opacity-100');
-                toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
-            }, 3000);
-        }
-    </script>
+    let toastTimeout;
+    function showToast(title, message, isAlert = false) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-title').innerText = title;
+        document.getElementById('toast-msg').innerText = message;
+        document.getElementById('toast-icon-bg').classList.toggle('alert', isAlert);
+        document.querySelector('#toast-icon use').setAttribute('href', isAlert ? '#i-alert' : '#i-check');
+        toast.classList.add('show');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+</script>
 </body>
 </html>
