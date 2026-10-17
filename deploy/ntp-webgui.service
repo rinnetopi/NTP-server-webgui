@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=ntp-admin
+User=ntp
 WorkingDirectory=/opt/ntp-server-webgui
 ExecStart=/opt/ntp-server-webgui/.venv/bin/python /opt/ntp-server-webgui/app.py
 Restart=on-failure

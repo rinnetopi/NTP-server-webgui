@@ -10,23 +10,36 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-USER_NAME="ntp-admin"
+SERVICE_USER="ntp"
+ADMIN_USER="ntp-admin"
 APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
 SUDOERS_FILE="/etc/sudoers.d/ntp-webgui"
 
-if id "${USER_NAME}" >/dev/null 2>&1; then
-  echo "User ${USER_NAME} already exists."
+# Create service user with nologin shell
+if id "${SERVICE_USER}" >/dev/null 2>&1; then
+  echo "User ${SERVICE_USER} already exists."
 else
-  useradd --badname --create-home --shell /usr/sbin/nologin "${USER_NAME}"
-  echo "Created user ${USER_NAME}."
+  useradd --badname --create-home --shell /usr/sbin/nologin "${SERVICE_USER}"
+  echo "Created service user ${SERVICE_USER}."
 fi
 
-# No local password for this service user.
-passwd -d "${USER_NAME}" >/dev/null 2>&1 || true
-passwd -l "${USER_NAME}" >/dev/null 2>&1 || true
+# Create admin user with bash shell and password
+if id "${ADMIN_USER}" >/dev/null 2>&1; then
+  echo "User ${ADMIN_USER} already exists."
+else
+  useradd --badname --create-home --shell /bin/bash "${ADMIN_USER}"
+  echo "Created admin user ${ADMIN_USER}."
+fi
+
+# No local password for service user.
+passwd -d "${SERVICE_USER}" >/dev/null 2>&1 || true
+passwd -l "${SERVICE_USER}" >/dev/null 2>&1 || true
+
+# Admin user has a password and can login
+passwd -u "${ADMIN_USER}" >/dev/null 2>&1 || true
 
 cat > "${SUDOERS_FILE}" <<'EOF'
-ntp-admin ALL=(root) NOPASSWD: /usr/bin/nmcli
+ntp ALL=(root) NOPASSWD: /usr/bin/nmcli
 ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony
 ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl reload chrony
 ntp-admin ALL=(root) NOPASSWD: /usr/sbin/reboot
@@ -37,7 +50,7 @@ chmod 440 "${SUDOERS_FILE}"
 visudo -cf "${SUDOERS_FILE}"
 
 if [[ -d "${APP_DIR}" ]]; then
-  chown -R "${USER_NAME}:${USER_NAME}" "${APP_DIR}"
+  chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}"
 fi
 
-echo "NTP user and sudo rights configured."
+echo "NTP users and sudo rights configured."
