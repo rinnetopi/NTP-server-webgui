@@ -199,6 +199,12 @@ def set_interface_mapping():
     WAN_CONNECTION_NAME = wan_name
     LAN_CONNECTION_NAME = lan_name
     WIFI_CONNECTION_NAME = wifi_name
+    
+    # Return the updated mapping in response for client-side consistency
+    return jsonify({
+        "success": True,
+        "mapping": updated_roles
+    })
 
     return jsonify(
         {
