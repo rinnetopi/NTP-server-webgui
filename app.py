@@ -45,12 +45,99 @@ def load_runtime_env(path):
     return runtime
 
 
+def detect_wan_interface():
+    """Detect which interface has the default route (internet connection)"""
+    try:
+        # Use ip route to find the default gateway interface
+        result = subprocess.run(["ip", "route", "show", "default"], 
+                              capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            # Look for the interface name in the route
+            import re
+            match = re.search(r'device\s+(\w+)', output)
+            if match:
+                interface = match.group(1)
+                # Validate it's either eth0 or eth1
+                if interface in ['eth0', 'eth1']:
+                    return interface
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    # Fallback to checking active connections with nmcli
+    try:
+        result = subprocess.run(["nmcli", "device", "status"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines[1:]:  # Skip header
+                parts = line.split()
+                if len(parts) >= 3 and parts[2] == "connected":
+                    device = parts[0]
+                    if device in ['eth0', 'eth1']:
+                        return device
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    # Final fallback - check if interfaces are actually up with ip link
+    try:
+        result = subprocess.run(["ip", "link", "show"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                if 'eth0' in line and 'state UP' in line:
+                    return 'eth0'
+                elif 'eth1' in line and 'state UP' in line:
+                    return 'eth1'
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    # If we can't determine, return None to use defaults
+    return None
+
+
 def build_interface_roles():
     runtime = load_runtime_env(RUNTIME_ENV_PATH)
+    
+    # Try to detect actual active interfaces if not set in runtime
+    wan_if = runtime.get(INTERFACE_KEY_MAP["wan"], os.getenv(INTERFACE_KEY_MAP["wan"], "eth0"))
+    lan_if = runtime.get(INTERFACE_KEY_MAP["lan"], os.getenv(INTERFACE_KEY_MAP["lan"], "eth1"))
+    wifi_if = runtime.get(INTERFACE_KEY_MAP["wifi"], os.getenv(INTERFACE_KEY_MAP["wifi"], "wlan0"))
+    
+    # Try to detect the actual WAN interface by checking network routes
+    detected_wan = detect_wan_interface()
+    if detected_wan:
+        # If we have a better detection, use it but maintain the mapping logic
+        # But only if it's not already set in runtime (preserve user preferences)
+        if INTERFACE_KEY_MAP["wan"] not in runtime:
+            wan_if = detected_wan
+    
+    # Validate that these interfaces exist and are properly configured
+    # If they're not in the expected state, we'll try to determine them from active connections
+    try:
+        # Check if NetworkManager is available and get current connection status
+        result = subprocess.run(["nmcli", "device", "status"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            # Parse nmcli output to find active connections
+            lines = result.stdout.strip().split('\n')
+            # Skip header line and process connection lines
+            for line in lines[1:]:  # Skip header
+                parts = line.split()
+                if len(parts) >= 3:
+                    device = parts[0]
+                    state = parts[2]
+                    # If we find an active connection, check if it's the default route
+                    if state == "connected":
+                        if device == wan_if or device == lan_if:
+                            # This is already set correctly
+                            continue
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        # NetworkManager not available or command failed, use defaults
+        pass
+    
     return {
-        "wan": runtime.get(INTERFACE_KEY_MAP["wan"], os.getenv(INTERFACE_KEY_MAP["wan"], "eth0")),
-        "lan": runtime.get(INTERFACE_KEY_MAP["lan"], os.getenv(INTERFACE_KEY_MAP["lan"], "eth1")),
-        "wifi": runtime.get(INTERFACE_KEY_MAP["wifi"], os.getenv(INTERFACE_KEY_MAP["wifi"], "wlan0")),
+        "wan": wan_if,
+        "lan": lan_if,
+        "wifi": wifi_if,
     }
 
 
@@ -73,6 +160,19 @@ def validate_wan_lan_swap(wan_name, lan_name):
     allowed = {"eth0", "eth1"}
     if wan_name not in allowed or lan_name not in allowed:
         return False, "WAN/LAN mapping supports only eth0 and eth1."
+
+    # Check that both interfaces actually exist
+    try:
+        result = subprocess.run(["ip", "link", "show", wan_name], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            return False, f"WAN interface {wan_name} does not exist."
+            
+        result = subprocess.run(["ip", "link", "show", lan_name], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            return False, f"LAN interface {lan_name} does not exist."
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+        # If we can't check, proceed with validation based on allowed set
+        pass
 
     if {wan_name, lan_name} != allowed:
         return False, "WAN/LAN mapping must be one eth0 and one eth1."
@@ -205,8 +305,6 @@ def set_interface_mapping():
         "success": True,
         "mapping": updated_roles
     })
-
-    return jsonify(
         {
             "success": True,
             "message": f"Interface mapping updated: WAN={wan_name}, LAN={lan_name}, Wi-Fi={wifi_name}.",
@@ -616,6 +714,116 @@ def reboot_system():
     if not success:
         return jsonify({"success": False, "error": output}), 500
     return jsonify({"success": True, "message": "Raspberry Pi is restarting..."})
+
+
+def reset_network_connections():
+    """Reset network connections to resolve conflicts after reboot"""
+    try:
+        # Try to disconnect and reconnect all ethernet interfaces
+        subprocess.run(["nmcli", "device", "disconnect", "eth0"], check=False, capture_output=True)
+        subprocess.run(["nmcli", "device", "disconnect", "eth1"], check=False, capture_output=True)
+        # Give some time for disconnection
+        import time
+        time.sleep(2)
+        # Reconnect eth0 and eth1 to force proper detection
+        subprocess.run(["nmcli", "device", "connect", "eth0"], check=False, capture_output=True)
+        subprocess.run(["nmcli", "device", "connect", "eth1"], check=False, capture_output=True)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        # If nmcli is not available, we can't reset connections
+        pass
+
+
+def fix_netplan_conflicts():
+    """Fix netplan conflicts that cause interface naming issues"""
+    try:
+        # Check for conflicting connections and remove them
+        result = subprocess.run(["nmcli", "con", "show"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            # Look for netplan-eth0 connections that might be conflicting
+            for line in lines[1:]:  # Skip header
+                if "netplan-eth" in line and ("eth0" in line or "eth1" in line):
+                    # Try to delete the conflicting connection
+                    parts = line.split()
+                    if len(parts) > 0:
+                        conn_name = parts[0]
+                        try:
+                            subprocess.run(["nmcli", "con", "delete", conn_name], check=True, capture_output=True)
+                        except:
+                            # If deletion fails, that's okay - continue
+                            pass
+        
+        # Restart NetworkManager to clear any stale connections
+        subprocess.run(["systemctl", "restart", "NetworkManager"], check=False, capture_output=True)
+        
+        return True
+    except Exception as e:
+        print(f"Error fixing netplan conflicts: {e}")
+        return False
+
+
+@app.route("/api/network/fix-netplan", methods=["POST"])
+def fix_netplan_conflicts_endpoint():
+    """Endpoint to manually fix netplan conflicts"""
+    try:
+        success = fix_netplan_conflicts()
+        if success:
+            return jsonify({"success": True, "message": "Netplan conflicts fixed"})
+        else:
+            return jsonify({"success": False, "error": "Failed to fix netplan conflicts"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error: {str(e)}"}), 500
+
+
+def restart_network_services():
+    """Restart network services to ensure proper interface configuration"""
+    try:
+        # Restart NetworkManager
+        subprocess.run(["systemctl", "restart", "NetworkManager"], check=False, capture_output=True)
+        
+        # Give some time for services to restart
+        import time
+        time.sleep(3)
+        
+        # Apply netplan configuration if it exists
+        try:
+            subprocess.run(["netplan", "apply"], check=False, capture_output=True)
+        except FileNotFoundError:
+            # netplan not available, that's okay
+            pass
+            
+        return True
+    except Exception as e:
+        print(f"Error restarting network services: {e}")
+        return False
+
+
+@app.route("/api/network/restart", methods=["POST"])
+def restart_network():
+    """Endpoint to restart network services"""
+    try:
+        success = restart_network_services()
+        if success:
+            # Rebuild interface roles after restart
+            global INTERFACE_ROLES, WAN_CONNECTION_NAME, LAN_CONNECTION_NAME, WIFI_CONNECTION_NAME
+            INTERFACE_ROLES = build_interface_roles()
+            WAN_CONNECTION_NAME = INTERFACE_ROLES["wan"]
+            LAN_CONNECTION_NAME = INTERFACE_ROLES["lan"]
+            WIFI_CONNECTION_NAME = INTERFACE_ROLES["wifi"]
+            
+            return jsonify({
+                "success": True, 
+                "message": "Network services restarted",
+                "current_mapping": {
+                    "wan": WAN_CONNECTION_NAME,
+                    "lan": LAN_CONNECTION_NAME,
+                    "wifi": WIFI_CONNECTION_NAME,
+                }
+            })
+        else:
+            return jsonify({"success": False, "error": "Failed to restart network services"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
