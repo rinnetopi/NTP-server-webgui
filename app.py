@@ -254,6 +254,51 @@ def subnet_mask_to_prefix(mask):
     return bits.count("1")
 
 
+def refresh_lan_proxy_dns(ip_address, lan_interface=None, subnet="255.255.0.0"):
+    """Rebuild the nginx and dnsmasq LAN config after a LAN IP change."""
+    if SANDBOX_MODE:
+        return True, "sandbox-ok"
+
+    if lan_interface is None:
+        lan_interface = LAN_CONNECTION_NAME
+
+    prefix = subnet_mask_to_prefix(subnet)
+    if prefix is None:
+        return False, "Invalid subnet mask."
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "LAN_INTERFACE": lan_interface,
+            "LAN_IP": ip_address,
+            "LAN_PREFIX": str(prefix),
+            "DOMAIN_NAME": "ct.ntpserver.org",
+        }
+    )
+
+    try:
+        result = subprocess.run(
+            ["sudo", "bash", "/opt/ntp-server-webgui/scripts/setup_proxy_dns.sh"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+    except (OSError, FileNotFoundError) as error:
+        return False, str(error)
+
+    if result.returncode != 0:
+        error_text = result.stderr.strip() or result.stdout.strip() or "proxy/DNS refresh failed"
+        return False, error_text
+
+    for service in ("nginx", "dnsmasq"):
+        success, output = run_cmd(["sudo", "systemctl", "reload", service])
+        if not success:
+            return False, output
+
+    return True, "Proxy and DNS refreshed for the new LAN IP."
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -557,10 +602,14 @@ def configure_lan():
     if not up_success:
         return jsonify({"success": False, "error": up_output}), 500
 
+    refresh_ok, refresh_output = refresh_lan_proxy_dns(ip_address, LAN_CONNECTION_NAME, subnet)
+    if not refresh_ok:
+        return jsonify({"success": False, "error": refresh_output}), 500
+
     return jsonify(
         {
             "success": True,
-            "message": f"LAN {LAN_CONNECTION_NAME} configured to static {ip_address}.",
+            "message": f"LAN {LAN_CONNECTION_NAME} configured to static {ip_address} and proxy/DNS refreshed.",
         }
     )
 

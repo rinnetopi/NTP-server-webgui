@@ -207,6 +207,46 @@ class FlaskSandboxTestbench(unittest.TestCase):
         body = response.get_json()
         self.assertTrue(body["success"])
 
+    def test_lan_update_reloads_proxy_and_dns(self):
+        calls = []
+
+        def fake_run_cmd(cmd_list, **kwargs):
+            calls.append(cmd_list)
+            if cmd_list[:3] == ["sudo", "nmcli", "con"] and cmd_list[3:5] == ["modify", "eth1"]:
+                return True, "ok"
+            if cmd_list[:4] == ["sudo", "nmcli", "con", "up"]:
+                return True, "up ok"
+            if cmd_list[:3] == ["sudo", "systemctl", "reload"]:
+                return True, "reload ok"
+            return True, "ok"
+
+        completed = __import__("subprocess").CompletedProcess(
+            args=["sudo", "bash", "/opt/ntp-server-webgui/scripts/setup_proxy_dns.sh"],
+            returncode=0,
+            stdout="proxy ok",
+            stderr="",
+        )
+
+        with patch.object(self.app_module, "SANDBOX_MODE", False), patch.object(
+            self.app_module, "run_cmd", side_effect=fake_run_cmd
+        ), patch.object(self.app_module.subprocess, "run", return_value=completed) as mock_run:
+            response = self.client.post(
+                "/api/network/lan",
+                json={"ip": "10.12.0.20", "subnet": "255.255.0.0"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertTrue(
+            any(
+                call.args and call.args[0][:3] == ["sudo", "bash", "/opt/ntp-server-webgui/scripts/setup_proxy_dns.sh"]
+                for call in mock_run.call_args_list
+            ),
+            "LAN IP change did not trigger proxy/DNS refresh",
+        )
+        self.assertIn(["sudo", "systemctl", "reload", "nginx"], calls)
+        self.assertIn(["sudo", "systemctl", "reload", "dnsmasq"], calls)
+
     def test_ntp_restart_success(self):
         response = self.client.post("/api/service/ntp", json={"action": "restart"})
         self.assertEqual(response.status_code, 200)
