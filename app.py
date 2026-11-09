@@ -166,11 +166,11 @@ def validate_wan_lan_swap(wan_name, lan_name):
         result = subprocess.run(["ip", "link", "show", wan_name], capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
             return False, f"WAN interface {wan_name} does not exist."
-            
+
         result = subprocess.run(["ip", "link", "show", lan_name], capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
             return False, f"LAN interface {lan_name} does not exist."
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
         # If we can't check, proceed with validation based on allowed set
         pass
 
@@ -299,12 +299,9 @@ def set_interface_mapping():
     WAN_CONNECTION_NAME = wan_name
     LAN_CONNECTION_NAME = lan_name
     WIFI_CONNECTION_NAME = wifi_name
-    
+
     # Return the updated mapping in response for client-side consistency
-    return jsonify({
-        "success": True,
-        "mapping": updated_roles
-    })
+    return jsonify(
         {
             "success": True,
             "message": f"Interface mapping updated: WAN={wan_name}, LAN={lan_name}, Wi-Fi={wifi_name}.",

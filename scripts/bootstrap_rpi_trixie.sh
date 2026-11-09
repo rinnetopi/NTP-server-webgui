@@ -226,6 +226,17 @@ main() {
   systemctl enable --now chrony
   systemctl enable --now NetworkManager
 
+  log "Configuring chrony as a LAN NTP server"
+  mkdir -p /etc/chrony/conf.d
+  cat > /etc/chrony/conf.d/ntp-webgui-lan.conf <<EOF
+# Allow LAN clients on the configured subnet
+allow ${LAN_IP%.*}.0/${LAN_PREFIX:-16}
+
+# Keep serving time even if upstream is temporarily unavailable
+local stratum 10
+EOF
+  systemctl restart chrony
+
   log "Ensuring NetworkManager profile exists for LAN interface ${LAN_INTERFACE}"
   if ! nmcli -g GENERAL.CONNECTION device show "${LAN_INTERFACE}" 2>/dev/null | grep -q .; then
     nmcli con add type ethernet ifname "${LAN_INTERFACE}" con-name "${LAN_INTERFACE}" >/dev/null 2>&1 || true
