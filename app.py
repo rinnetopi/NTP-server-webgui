@@ -299,6 +299,26 @@ def refresh_lan_proxy_dns(ip_address, lan_interface=None, subnet="255.255.0.0"):
     return True, "Proxy and DNS refreshed for the new LAN IP."
 
 
+def get_interface_ipv4(interface_name):
+    if SANDBOX_MODE:
+        sandbox_values = {
+            WAN_CONNECTION_NAME: "192.168.1.150",
+            LAN_CONNECTION_NAME: "10.12.0.1",
+            WIFI_CONNECTION_NAME: "192.168.1.180",
+        }
+        return sandbox_values.get(interface_name, "")
+
+    success, output = run_cmd(["ip", "-4", "-o", "addr", "show", "dev", interface_name])
+    if not success:
+        return ""
+
+    match = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", output)
+    if not match:
+        return ""
+
+    return match.group(1)
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -351,6 +371,25 @@ def set_interface_mapping():
             "success": True,
             "message": f"Interface mapping updated: WAN={wan_name}, LAN={lan_name}, Wi-Fi={wifi_name}.",
             "mapping": updated_roles,
+        }
+    )
+
+
+@app.route("/api/network/current", methods=["GET"])
+def get_current_network_values():
+    return jsonify(
+        {
+            "success": True,
+            "mapping": {
+                "wan": WAN_CONNECTION_NAME,
+                "lan": LAN_CONNECTION_NAME,
+                "wifi": WIFI_CONNECTION_NAME,
+            },
+            "addresses": {
+                "wan": get_interface_ipv4(WAN_CONNECTION_NAME),
+                "lan": get_interface_ipv4(LAN_CONNECTION_NAME),
+                "wifi": get_interface_ipv4(WIFI_CONNECTION_NAME),
+            },
         }
     )
 

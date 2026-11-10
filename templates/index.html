@@ -527,9 +527,35 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             console.error("Failed to fetch system status:", error);
         }
     }
+
+      async function loadCurrentNetworkValues() {
+        try {
+          const res = await fetch('/api/network/current');
+          const data = await res.json();
+          if (!data.success || !data.addresses) {
+            return;
+          }
+
+          const wanIp = data.addresses.wan || '';
+          const lanIp = data.addresses.lan || '';
+
+          if (wanIp) {
+            document.getElementById('wan-input-ip').value = wanIp;
+            document.getElementById('disp-wan').innerText = `${wanIp} (Active)`;
+          }
+
+          if (lanIp) {
+            document.getElementById('lan-input-ip').value = lanIp;
+            document.getElementById('disp-lan').innerText = `${lanIp} (Static)`;
+          }
+        } catch (error) {
+          console.error('Failed to load current network values:', error);
+        }
+      }
     setInterval(fetchSystemStatus, 5000);
     fetchSystemStatus();
     loadInterfaceMapping();
+      loadCurrentNetworkValues();
 
     function setMode(prefix, isStatic) {
         document.getElementById(prefix + '-static-fields').classList.toggle('hidden-section', !isStatic);
@@ -653,6 +679,7 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             const data = await res.json();
             if (data.success) {
                 document.getElementById('disp-lan').innerText = `${payload.ip} (Static)`;
+              await loadCurrentNetworkValues();
                 showToast("LAN Saved", `${interfaceRoles.lan} NTP server IP updated.`);
             } else {
                 showToast("Error", data.error, true);

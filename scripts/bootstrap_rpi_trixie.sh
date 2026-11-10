@@ -226,6 +226,13 @@ main() {
   systemctl enable --now chrony
   systemctl enable --now NetworkManager
 
+  log "Enabling Wi-Fi radio"
+  if command -v rfkill >/dev/null 2>&1; then
+    rfkill unblock wifi >/dev/null 2>&1 || true
+  fi
+  nmcli radio wifi on >/dev/null 2>&1 || true
+  nmcli device set "${WIFI_INTERFACE}" managed yes >/dev/null 2>&1 || true
+
   log "Configuring chrony as a LAN NTP server"
   mkdir -p /etc/chrony/conf.d
   cat > /etc/chrony/conf.d/ntp-webgui-lan.conf <<EOF

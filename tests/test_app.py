@@ -134,6 +134,28 @@ class FlaskSandboxTestbench(unittest.TestCase):
         self.assertIn("wan", body["mapping"])
         self.assertIn("lan", body["mapping"])
 
+    def test_current_network_values_endpoint(self):
+        def fake_run_cmd(cmd_list):
+            if cmd_list == ["ip", "-4", "-o", "addr", "show", "dev", "eth0"]:
+                return True, "2: eth0    inet 192.168.1.239/24 brd 192.168.1.255 scope global eth0"
+            if cmd_list == ["ip", "-4", "-o", "addr", "show", "dev", "eth1"]:
+                return True, "3: eth1    inet 10.12.0.10/16 brd 10.12.255.255 scope global eth1"
+            if cmd_list == ["ip", "-4", "-o", "addr", "show", "dev", "wlan0"]:
+                return False, "no address"
+            return True, "ok"
+
+        with patch.object(self.app_module, "SANDBOX_MODE", False), patch.object(
+            self.app_module, "run_cmd", side_effect=fake_run_cmd
+        ):
+            response = self.client.get("/api/network/current")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertTrue(body["success"])
+        self.assertEqual(body["addresses"]["wan"], "192.168.1.239")
+        self.assertEqual(body["addresses"]["lan"], "10.12.0.10")
+        self.assertEqual(body["addresses"]["wifi"], "")
+
     def test_interface_mapping_rejects_same_interface(self):
         response = self.client.post(
             "/api/network/interfaces",
