@@ -229,6 +229,13 @@ class FlaskSandboxTestbench(unittest.TestCase):
         body = response.get_json()
         self.assertTrue(body["success"])
 
+    def test_lan_update_requires_payload_values(self):
+        response = self.client.post("/api/network/lan", json={})
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertFalse(body["success"])
+        self.assertIn("required", body["error"].lower())
+
     def test_lan_update_reloads_proxy_and_dns(self):
         calls = []
 
@@ -243,7 +250,7 @@ class FlaskSandboxTestbench(unittest.TestCase):
             return True, "ok"
 
         completed = __import__("subprocess").CompletedProcess(
-            args=["sudo", "bash", "/opt/ntp-server-webgui/scripts/setup_proxy_dns.sh"],
+            args=["sudo", "bash", "/opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh"],
             returncode=0,
             stdout="proxy ok",
             stderr="",
@@ -261,7 +268,7 @@ class FlaskSandboxTestbench(unittest.TestCase):
         self.assertTrue(response.get_json()["success"])
         self.assertTrue(
             any(
-                call.args and call.args[0][:3] == ["sudo", "bash", "/opt/ntp-server-webgui/scripts/setup_proxy_dns.sh"]
+                call.args and call.args[0][:3] == ["sudo", "bash", "/opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh"]
                 for call in mock_run.call_args_list
             ),
             "LAN IP change did not trigger proxy/DNS refresh",

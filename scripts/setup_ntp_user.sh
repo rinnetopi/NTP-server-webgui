@@ -39,9 +39,24 @@ passwd -l "${SERVICE_USER}" >/dev/null 2>&1 || true
 passwd -u "${ADMIN_USER}" >/dev/null 2>&1 || true
 
 cat > "${SUDOERS_FILE}" <<'EOF'
+# Runtime commands used by the Flask app running as service user 'ntp'.
 ntp ALL=(root) NOPASSWD: /usr/bin/nmcli
+ntp ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony
+ntp ALL=(root) NOPASSWD: /usr/bin/systemctl reload chrony
+ntp ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
+ntp ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq
+ntp ALL=(root) NOPASSWD: /usr/bin/bash /opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh
+ntp ALL=(root) NOPASSWD: /usr/bin/bash /opt/ntp-server-webgui/scripts/setup_proxy_dns.sh
+ntp ALL=(root) NOPASSWD: /usr/sbin/reboot
+ntp ALL=(root) NOPASSWD: /usr/bin/reboot
+
+# Optional admin convenience commands.
 ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony
 ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl reload chrony
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/bash /opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh
+ntp-admin ALL=(root) NOPASSWD: /usr/bin/bash /opt/ntp-server-webgui/scripts/setup_proxy_dns.sh
 ntp-admin ALL=(root) NOPASSWD: /usr/sbin/reboot
 ntp-admin ALL=(root) NOPASSWD: /usr/bin/reboot
 EOF

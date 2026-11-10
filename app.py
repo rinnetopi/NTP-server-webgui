@@ -278,7 +278,7 @@ def refresh_lan_proxy_dns(ip_address, lan_interface=None, subnet="255.255.0.0"):
 
     try:
         result = subprocess.run(
-            ["sudo", "bash", "/opt/ntp-server-webgui/scripts/setup_proxy_dns.sh"],
+            ["sudo", "bash", "/opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh"],
             capture_output=True,
             text=True,
             check=False,
@@ -604,9 +604,17 @@ def scan_wifi():
 
 @app.route("/api/network/lan", methods=["POST"])
 def configure_lan():
-    data = request.get_json(silent=True) or {}
-    ip_address = str(data.get("ip", "10.12.0.1")).strip()
-    subnet = str(data.get("subnet", "255.255.0.0")).strip()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+
+    ip_address = str(data.get("ip") or request.form.get("ip") or "").strip()
+    subnet = str(data.get("subnet") or request.form.get("subnet") or "").strip()
+
+    if not ip_address:
+        return jsonify({"success": False, "error": "LAN IP address is required."}), 400
+    if not subnet:
+        return jsonify({"success": False, "error": "LAN subnet mask is required."}), 400
 
     if not IP_REGEX.match(ip_address):
         return jsonify({"success": False, "error": "Invalid LAN IP address."}), 400
