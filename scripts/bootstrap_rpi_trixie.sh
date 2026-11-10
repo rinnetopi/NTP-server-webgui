@@ -35,8 +35,6 @@ PACKAGES=(
   python3-pip
   chrony
   network-manager
-  nginx
-  dnsmasq
   nftables
 )
 
@@ -266,10 +264,6 @@ EOF
   WAN_INTERFACE="${WAN_INTERFACE}" LAN_INTERFACE="${LAN_INTERFACE}" WIFI_INTERFACE="${WIFI_INTERFACE}" APP_DIR="${APP_DIR}" \
     bash "${SRC_DIR}/scripts/setup_ntp_service.sh"
 
-  log "Configuring reverse proxy + local DNS (${DOMAIN_NAME} -> ${LAN_IP})"
-  LAN_INTERFACE="${LAN_INTERFACE}" LAN_IP="${LAN_IP}" DOMAIN_NAME="${DOMAIN_NAME}" \
-    bash "${SRC_DIR}/scripts/setup_proxy_dns.sh"
-
   log "Applying inter-interface isolation firewall (NTP-only forwarding)"
   WAN_INTERFACE="${WAN_INTERFACE}" WIFI_INTERFACE="${WIFI_INTERFACE}" LAN_INTERFACE="${LAN_INTERFACE}" \
     bash "${SRC_DIR}/scripts/setup_firewall_isolation.sh"
@@ -296,16 +290,12 @@ EOF
   echo "Quick checks:"
   echo "  systemctl status ntp-webgui --no-pager"
   echo "  systemctl status chrony --no-pager"
-  echo "  systemctl status nginx --no-pager"
-  echo "  systemctl status dnsmasq --no-pager"
   echo "  systemctl status nftables --no-pager"
   echo "  nft list ruleset"
   echo
   echo "How to proceed:"
-  echo "  1) On a client in the ${LAN_INTERFACE} network, set DNS server to ${LAN_IP}."
-  echo "  2) Open: http://${DOMAIN_NAME}"
-  echo "  3) If hostname does not resolve, test: nslookup ${DOMAIN_NAME} ${LAN_IP}"
-  echo "  4) If needed, verify LAN IP on Pi: ip -4 addr show ${LAN_INTERFACE}"
+  echo "  1) Open UI directly: http://${LAN_IP}:5000"
+  echo "  2) If needed, verify LAN IP on Pi: ip -4 addr show ${LAN_INTERFACE}"
 }
 
 main "$@"

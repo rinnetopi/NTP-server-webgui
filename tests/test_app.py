@@ -236,7 +236,7 @@ class FlaskSandboxTestbench(unittest.TestCase):
         self.assertFalse(body["success"])
         self.assertIn("required", body["error"].lower())
 
-    def test_lan_update_reloads_proxy_and_dns(self):
+    def test_lan_update_applies_nmcli_commands(self):
         calls = []
 
         def fake_run_cmd(cmd_list, **kwargs):
@@ -245,20 +245,9 @@ class FlaskSandboxTestbench(unittest.TestCase):
                 return True, "ok"
             if cmd_list[:4] == ["sudo", "nmcli", "con", "up"]:
                 return True, "up ok"
-            if cmd_list[:3] == ["sudo", "systemctl", "reload"]:
-                return True, "reload ok"
             return True, "ok"
 
-        completed = __import__("subprocess").CompletedProcess(
-            args=["sudo", "bash", "/opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh"],
-            returncode=0,
-            stdout="proxy ok",
-            stderr="",
-        )
-
-        with patch.object(self.app_module, "SANDBOX_MODE", False), patch.object(
-            self.app_module, "run_cmd", side_effect=fake_run_cmd
-        ), patch.object(self.app_module.subprocess, "run", return_value=completed) as mock_run:
+        with patch.object(self.app_module, "run_cmd", side_effect=fake_run_cmd):
             response = self.client.post(
                 "/api/network/lan",
                 json={"ip": "10.12.0.20", "subnet": "255.255.0.0"},
@@ -268,13 +257,18 @@ class FlaskSandboxTestbench(unittest.TestCase):
         self.assertTrue(response.get_json()["success"])
         self.assertTrue(
             any(
-                call.args and call.args[0][:3] == ["sudo", "bash", "/opt/ntp-server-webgui/scripts/refresh_proxy_dns_runtime.sh"]
-                for call in mock_run.call_args_list
+                len(cmd) >= 7
+                and cmd[:4] == ["sudo", "nmcli", "con", "modify"]
+                and cmd[5] == "ipv4.addresses"
+                and "10.12.0.20/16" in cmd
+                for cmd in calls
             ),
-            "LAN IP change did not trigger proxy/DNS refresh",
+            "LAN IP change did not apply nmcli modify with expected address.",
         )
-        self.assertIn(["sudo", "systemctl", "reload", "nginx"], calls)
-        self.assertIn(["sudo", "systemctl", "reload", "dnsmasq"], calls)
+        self.assertTrue(
+            any(len(cmd) == 5 and cmd[:4] == ["sudo", "nmcli", "con", "up"] for cmd in calls),
+            "LAN IP change did not bring the LAN connection back up.",
+        )
 
     def test_ntp_restart_success(self):
         response = self.client.post("/api/service/ntp", json={"action": "restart"})

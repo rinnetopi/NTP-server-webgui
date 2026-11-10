@@ -10,9 +10,10 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-LAN_INTERFACE="${LAN_INTERFACE:-eth1}"
-LAN_IP="${LAN_IP:-10.12.0.1}"
-DOMAIN_NAME="${DOMAIN_NAME:-ct.ntpserver.org}"
+LAN_INTERFACE="${1:-${LAN_INTERFACE:-eth1}}"
+LAN_IP="${2:-${LAN_IP:-10.12.0.1}}"
+LAN_PREFIX="${3:-${LAN_PREFIX:-16}}"
+DOMAIN_NAME="${4:-${DOMAIN_NAME:-ct.ntpserver.org}}"
 
 cat > /etc/nginx/sites-available/ntpserver <<EOF
 server {
