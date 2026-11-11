@@ -4,18 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Raspberry Pi NTP Server Network Settings</title>
-<script src="{{ url_for('static', filename='assets/tailwind.min.js') }}"></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='assets/fontawesome.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='assets/site.css') }}">
 
 <style>
-/* Optional: drop Inter-Variable.woff2 into the same folder as this page's static route
-   (or edit the url below). If absent, the system font stack is used. Nothing is fetched remotely. */
-@font-face {
-  font-family: 'Inter'; font-style: normal; font-weight: 300 700; font-display: swap;
-  src: local('Inter'), local('Inter Variable');
-}
-
 :root { --blue:#1565c0; --blue-dark:#0d47a1; --blue-text:#60a5fa; --gray:#6b7280; --muted:#9ca3af; --rose:#fb7185; }
 
 * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;
@@ -165,6 +156,24 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
 #toast-title { font-size:.75rem; font-weight:700; color:#fff; }
 #toast-msg { font-size:.75rem; color:var(--muted); }
 
+.header-right { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; justify-content:center; }
+.user-chip { display:flex; align-items:center; gap:.5rem; font-size:.75rem; color:var(--muted); }
+.user-chip form { display:inline; }
+.signout { display:inline-flex; align-items:center; gap:.375rem; padding:.375rem .75rem; border-radius:9999px;
+           font-size:.75rem; font-weight:600; color:#e0e0e0; background:#1b1b1b; border:1px solid rgba(255,255,255,.06); }
+.signout:hover { color:#fff; border-color:rgba(255,255,255,.15); }
+.service > div:first-child { flex:1; min-width:0; }
+.service-btns .btn { white-space:nowrap; }
+@media (max-width:639px) { .service-btns { flex-wrap:wrap; } }
+.tactile-btn-secondary.neutral { color:#e0e0e0; }
+
+dialog.pw-dialog { margin:auto; width:calc(100% - 2rem); max-width:26rem; padding:1.5rem; color:#e0e0e0; border-radius:1.25rem;
+  background:linear-gradient(145deg,#1e1e1e,#161616); border:1px solid rgba(255,255,255,.06); box-shadow:0 25px 50px -12px rgba(0,0,0,.7); }
+dialog.pw-dialog::backdrop { background:rgba(0,0,0,.6); }
+.pw-dialog h2 { margin-bottom:.25rem; }
+.pw-dialog .form { margin-top:1.25rem; }
+.pw-error { font-size:.75rem; color:var(--rose); min-height:1rem; }
+
 ::-webkit-scrollbar { width:8px; }
 ::-webkit-scrollbar-track { background:#121212; }
 ::-webkit-scrollbar-thumb { background:#252525; border-radius:4px; }
@@ -172,7 +181,7 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
 </head>
 <body>
 
-<!-- Inline SVG icon sprite (replaces fontawesome.css) -->
+<!-- Inline SVG icon sprite -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
@@ -192,6 +201,8 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
     <symbol id="i-restart" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
     <symbol id="i-reboot" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></symbol>
   </defs>
 </svg>
@@ -204,16 +215,24 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
       <div>
         <h1>NTP Server Control</h1>
         <p class="meta">
-          <span>Raspberry Pi 3B+</span> •
+          <span id="device-model">Raspberry Pi</span> •
           <span id="uptime-text">Uptime: Loading...</span> •
           <span class="cpu mono"><svg class="icon"><use href="#i-cpu"/></svg><span id="cpu-load">--</span></span> •
           <span class="temp mono"><svg class="icon"><use href="#i-temp"/></svg><span id="cpu-temp">--°C</span></span>
         </p>
       </div>
     </div>
-    <div class="status-badge-online">
-      <span class="pulse-dot"></span>
-      <span class="txt" id="server-status-label">Chrony Active</span>
+    <div class="header-right">
+      <div class="status-badge-online">
+        <span class="pulse-dot"></span>
+        <span class="txt" id="server-status-label">Chrony Active</span>
+      </div>
+      <div class="user-chip">
+        <span>{{ username }}</span>
+        <form method="post" action="{{ url_for('logout') }}">
+          <button type="submit" class="signout"><svg class="icon"><use href="#i-logout"/></svg>Sign out</button>
+        </form>
+      </div>
     </div>
   </header>
 
@@ -309,6 +328,14 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             <label class="field-label">Subnet Mask</label>
             <input type="text" id="wan-input-subnet" value="255.255.255.0" class="tactile-input">
           </div>
+          <div>
+            <label class="field-label">Default Gateway</label>
+            <input type="text" id="wan-input-gateway" placeholder="e.g. 192.168.1.1" class="tactile-input">
+          </div>
+          <div>
+            <label class="field-label">DNS Servers (comma separated)</label>
+            <input type="text" id="wan-input-dns" placeholder="e.g. 192.168.1.1, 1.1.1.1" class="tactile-input">
+          </div>
         </div>
       </div>
       <div class="actions">
@@ -360,7 +387,7 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
       <div>
         <label class="field-label">WPA2/WPA3 Password</label>
         <div class="rel">
-          <input type="password" id="input-wifi-pass" placeholder="Enter wireless password" required class="tactile-input pw">
+          <input type="password" id="input-wifi-pass" placeholder="Leave empty for open networks" class="tactile-input pw">
           <button type="button" class="abs-btn" onclick="togglePasswordVisibility('input-wifi-pass','pass-icon')" aria-label="Show or hide password">
             <svg class="icon" id="pass-icon"><use href="#i-eye"/></svg>
           </button>
@@ -375,6 +402,14 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
           <div>
             <label class="field-label">Subnet Mask</label>
             <input type="text" id="wifi-input-subnet" value="255.255.255.0" class="tactile-input">
+          </div>
+          <div>
+            <label class="field-label">Default Gateway</label>
+            <input type="text" id="wifi-input-gateway" placeholder="e.g. 192.168.1.1" class="tactile-input">
+          </div>
+          <div>
+            <label class="field-label">DNS Servers (comma separated)</label>
+            <input type="text" id="wifi-input-dns" placeholder="e.g. 192.168.1.1" class="tactile-input">
           </div>
         </div>
       </div>
@@ -396,17 +431,10 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
           <p class="sub">Closed Local Network (No Internet / No Gateway / No DNS)</p>
         </div>
       </div>
-      <div class="mode-switch">
-        <span class="mode-lbl" id="lan-dhcp-lbl">DHCP</span>
-        <label class="switch">
-          <input type="checkbox" id="lan-dhcp-toggle" checked onchange="toggleLanMode(this.checked)">
-          <span class="track"></span>
-        </label>
-        <span class="mode-lbl" id="lan-static-lbl" style="color:#60a5fa">Static</span>
-      </div>
+      <span class="mode-lbl" style="color:#60a5fa">Static only</span>
     </div>
     <form id="lan-form" class="form" onsubmit="saveLanSettings(event)">
-      <div id="lan-static-fields" class="conditional-section">
+      <div id="lan-static-fields">
         <div class="grid-2">
           <div>
             <label class="field-label">LAN Server Static IPv4</label>
@@ -429,12 +457,15 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
   <!-- Service control -->
   <section class="tactile-card service">
     <div>
-      <h3>NTP Service Daemon Control</h3>
-      <p class="sub">Restart chrony NTP server or reboot Raspberry Pi.</p>
+      <h3>Service &amp; Access Control</h3>
+      <p class="sub">Restart chrony, change the login password or reboot the Raspberry Pi.</p>
     </div>
     <div class="service-btns">
       <button class="btn tactile-btn-secondary info" onclick="triggerServiceAction('restart')">
         <svg class="icon"><use href="#i-restart"/></svg><span>Restart Chrony</span>
+      </button>
+      <button class="btn tactile-btn-secondary neutral" onclick="openPasswordDialog()">
+        <svg class="icon"><use href="#i-key"/></svg><span>Change Password</span>
       </button>
       <button class="btn tactile-btn-secondary danger" onclick="triggerServiceAction('reboot')">
         <svg class="icon"><use href="#i-reboot"/></svg><span>Reboot Pi</span>
@@ -442,6 +473,32 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
     </div>
   </section>
 </div>
+
+<dialog id="pw-dialog" class="pw-dialog" aria-labelledby="pw-title">
+  <h2 id="pw-title">Change Password</h2>
+  <p class="sub">Password for user <strong>{{ username }}</strong>. Minimum 6 characters.</p>
+  <form id="pw-form" class="form" onsubmit="savePassword(event)">
+    <div>
+      <label class="field-label" for="pw-current">Current Password</label>
+      <input type="password" id="pw-current" autocomplete="current-password" required class="tactile-input">
+    </div>
+    <div>
+      <label class="field-label" for="pw-new">New Password</label>
+      <input type="password" id="pw-new" autocomplete="new-password" minlength="6" required class="tactile-input">
+    </div>
+    <div>
+      <label class="field-label" for="pw-confirm">Confirm New Password</label>
+      <input type="password" id="pw-confirm" autocomplete="new-password" minlength="6" required class="tactile-input">
+    </div>
+    <p class="pw-error" id="pw-error" role="alert"></p>
+    <div class="actions">
+      <button type="button" class="btn tactile-btn-secondary" onclick="closePasswordDialog()">Cancel</button>
+      <button type="submit" class="btn tactile-btn-primary">
+        <svg class="icon"><use href="#i-save"/></svg><span>Save Password</span>
+      </button>
+    </div>
+  </form>
+</dialog>
 
 <div id="toast">
   <div class="toast-inner">
@@ -454,7 +511,27 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
 </div>
 
 <script>
+    // Session expired or signed out elsewhere: go to the login page.
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+        const res = await nativeFetch(...args);
+        if (res.status === 401) {
+            location.href = '/login';
+        }
+        return res;
+    };
+
     const interfaceRoles = { wan: 'eth0', lan: 'eth1', wifi: 'wlan0' };
+
+    const IPV4 = /^((25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(25[0-5]|2[0-4]\d|[01]?\d?\d)$/;
+
+    // Fields the user has edited are not overwritten by background refreshes.
+    const dirtyFields = new Set();
+    let currentLanIp = '';
+    document.addEventListener('input', e => { if (e.target.id) dirtyFields.add(e.target.id); });
+    function setIfClean(id, value) {
+        if (!dirtyFields.has(id)) document.getElementById(id).value = value;
+    }
 
     function applyInterfaceLabels() {
         document.getElementById('label-wan-summary').innerText = `WAN Source (${interfaceRoles.wan})`;
@@ -503,6 +580,7 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
                 interfaceRoles.lan = data.mapping.lan;
                 interfaceRoles.wifi = data.mapping.wifi || interfaceRoles.wifi;
                 applyInterfaceLabels();
+                loadCurrentNetworkValues();
                 showToast('Mapping Saved', `WAN=${interfaceRoles.wan}, LAN=${interfaceRoles.lan}`);
             } else {
                 showToast('Mapping Error', data.error || 'Failed to save mapping.', true);
@@ -519,8 +597,9 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             if (data.success) {
                 document.getElementById('uptime-text').innerText = `Uptime: ${data.uptime}`;
                 document.getElementById('cpu-load').innerText = data.load.join(', ');
-                document.getElementById('cpu-temp').innerText = `${data.temperature}°C`;
-                document.getElementById('disp-stratum').innerText = `Stratum ${data.stratum}`;
+                document.getElementById('cpu-temp').innerText = data.temperature === null ? 'n/a' : `${data.temperature}°C`;
+                document.getElementById('disp-stratum').innerText = data.stratum === null ? 'Not synced' : `Stratum ${data.stratum}`;
+                if (data.model) document.getElementById('device-model').innerText = data.model;
                 document.getElementById('server-status-label').innerText = data.chrony_active ? 'Chrony Active' : 'Chrony Inactive';
             }
         } catch (error) {
@@ -536,26 +615,29 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             return;
           }
 
+          const methods = data.methods || {};
           const wanIp = data.addresses.wan || '';
           const lanIp = data.addresses.lan || '';
+          const wanStatic = methods.wan === 'static';
+          const modeLabel = m => m === 'static' ? 'Static' : (m === 'dhcp' ? 'DHCP' : 'Unknown');
 
-          if (wanIp) {
-            document.getElementById('wan-input-ip').value = wanIp;
-            document.getElementById('disp-wan').innerText = `${wanIp} (Active)`;
+          if (!dirtyFields.has('wan-dhcp-toggle')) {
+            document.getElementById('wan-dhcp-toggle').checked = wanStatic;
+            toggleWanMode(wanStatic);
           }
+          if (wanIp) setIfClean('wan-input-ip', wanIp);
+          document.getElementById('disp-wan').innerText = wanIp ? `${wanIp} (${modeLabel(methods.wan)})` : 'No address';
 
-          if (lanIp) {
-            document.getElementById('lan-input-ip').value = lanIp;
-            document.getElementById('disp-lan').innerText = `${lanIp} (Static)`;
-          }
+          currentLanIp = lanIp;
+          if (lanIp) setIfClean('lan-input-ip', lanIp);
+          document.getElementById('disp-lan').innerText = lanIp ? `${lanIp} (${modeLabel(methods.lan)})` : 'No address';
         } catch (error) {
           console.error('Failed to load current network values:', error);
         }
       }
     setInterval(fetchSystemStatus, 5000);
     fetchSystemStatus();
-    loadInterfaceMapping();
-      loadCurrentNetworkValues();
+    loadInterfaceMapping().then(loadCurrentNetworkValues);
 
     function setMode(prefix, isStatic) {
         document.getElementById(prefix + '-static-fields').classList.toggle('hidden-section', !isStatic);
@@ -564,7 +646,6 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
     }
     function toggleWanMode(isStatic)  { setMode('wan',  isStatic); }
     function toggleWifiMode(isStatic) { setMode('wifi', isStatic); }
-    function toggleLanMode(isStatic)  { setMode('lan',  isStatic); }
 
     function onWifiSelectChange(value) {
         document.getElementById('custom-ssid-box').classList.toggle('hidden-section', value !== 'custom');
@@ -613,9 +694,15 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
         const isStatic = document.getElementById('wan-dhcp-toggle').checked;
         const payload = {
             mode: isStatic ? 'static' : 'dhcp',
-            ip: document.getElementById('wan-input-ip').value,
-            subnet: document.getElementById('wan-input-subnet').value
+            ip: document.getElementById('wan-input-ip').value.trim(),
+            subnet: document.getElementById('wan-input-subnet').value.trim(),
+            gateway: document.getElementById('wan-input-gateway').value.trim(),
+            dns: document.getElementById('wan-input-dns').value.trim()
         };
+        if (isStatic && !payload.gateway &&
+            !confirm('No default gateway set. The Pi will lose internet access and upstream NTP on WAN. Continue?')) {
+            return;
+        }
         try {
             const res = await fetch('/api/network/wan', {
                 method: 'POST',
@@ -624,7 +711,8 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             });
             const data = await res.json();
             if (data.success) {
-                document.getElementById('disp-wan').innerText = isStatic ? payload.ip : "DHCP (Active)";
+                ['wan-dhcp-toggle', 'wan-input-ip'].forEach(id => dirtyFields.delete(id));
+                await loadCurrentNetworkValues();
                 showToast("WAN Saved", `${interfaceRoles.wan} network configuration applied.`);
             } else {
                 showToast("Error", data.error || "Failed to update WAN.", true);
@@ -644,9 +732,15 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             mode: document.getElementById('wifi-dhcp-toggle').checked ? 'static' : 'dhcp',
             ssid: ssid,
             password: document.getElementById('input-wifi-pass').value,
-            ip: document.getElementById('wifi-input-ip').value,
-            subnet: document.getElementById('wifi-input-subnet').value
+            ip: document.getElementById('wifi-input-ip').value.trim(),
+            subnet: document.getElementById('wifi-input-subnet').value.trim(),
+            gateway: document.getElementById('wifi-input-gateway').value.trim(),
+            dns: document.getElementById('wifi-input-dns').value.trim()
         };
+        if (!payload.ssid) {
+            showToast("Wi-Fi Error", "Select or enter a network name first.", true);
+            return;
+        }
         try {
             const res = await fetch('/api/network/wifi', {
                 method: 'POST',
@@ -667,29 +761,55 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
     async function saveLanSettings(event) {
         event.preventDefault();
         const payload = {
-            ip: document.getElementById('lan-input-ip').value,
-            subnet: document.getElementById('lan-input-subnet').value
+            ip: document.getElementById('lan-input-ip').value.trim(),
+            subnet: document.getElementById('lan-input-subnet').value.trim()
         };
+        if (!IPV4.test(payload.ip) || !IPV4.test(payload.subnet)) {
+            showToast("Error", "Enter a valid LAN IPv4 address and subnet mask.", true);
+            return;
+        }
+        // If this page is open on the LAN address being changed, the connection drops.
+        const onLanAddress = location.hostname === currentLanIp;
+        const newUrl = `${location.protocol}//${payload.ip}${location.port ? ':' + location.port : ''}/`;
+        if (!confirm(`Change the LAN address to ${payload.ip}?` +
+                     (onLanAddress ? `\nThis page will reconnect at ${newUrl}` : ''))) {
+            return;
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+        showToast("Applying LAN Settings", `Setting ${interfaceRoles.lan} to ${payload.ip}...`);
         try {
             const res = await fetch('/api/network/lan', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
             const data = await res.json();
             if (data.success) {
-                document.getElementById('disp-lan').innerText = `${payload.ip} (Static)`;
-              await loadCurrentNetworkValues();
-                showToast("LAN Saved", `${interfaceRoles.lan} NTP server IP updated.`);
+                dirtyFields.delete('lan-input-ip');
+                await loadCurrentNetworkValues();
+                showToast("LAN Saved", data.message || `${interfaceRoles.lan} NTP server IP updated.`);
             } else {
-                showToast("Error", data.error, true);
+                showToast("Error", data.error || "Failed to update LAN.", true);
             }
         } catch (error) {
-            showToast("Error", "Failed to save LAN settings.", true);
+            if (onLanAddress && payload.ip !== location.hostname) {
+                showToast("LAN Address Changed", `Reconnecting at ${newUrl} ...`);
+                setTimeout(() => { location.href = newUrl; }, 3000);
+            } else {
+                showToast("Error", "No response while applying LAN settings. Reload the page to check the result.", true);
+            }
+        } finally {
+            clearTimeout(timer);
         }
     }
 
     async function triggerServiceAction(action) {
+        if (action === 'reboot' && !confirm('Reboot the Raspberry Pi now?')) {
+            return;
+        }
         try {
             const endpoint = action === 'reboot' ? '/api/service/reboot' : '/api/service/ntp';
             const payload = action === 'reboot' ? {} : { action: 'restart' };
@@ -702,10 +822,50 @@ select.tactile-input option { background:#1a1a1a; color:#fff; }
             if (data.success) {
                 showToast(action === 'reboot' ? "Rebooting Pi" : "Chrony Restarted", data.message);
             } else {
-                showToast("Action Failed", data.error, true);
+                showToast("Action Failed", data.error || "Command failed.", true);
             }
         } catch (error) {
             showToast("Error", "Service command failed.", true);
+        }
+    }
+
+    function openPasswordDialog() {
+        document.getElementById('pw-form').reset();
+        document.getElementById('pw-error').innerText = '';
+        document.getElementById('pw-dialog').showModal();
+    }
+    function closePasswordDialog() {
+        document.getElementById('pw-dialog').close();
+    }
+
+    async function savePassword(event) {
+        event.preventDefault();
+        const errorEl = document.getElementById('pw-error');
+        const payload = {
+            current_password: document.getElementById('pw-current').value,
+            new_password: document.getElementById('pw-new').value,
+            confirm_password: document.getElementById('pw-confirm').value
+        };
+        if (payload.new_password !== payload.confirm_password) {
+            errorEl.innerText = 'New passwords do not match.';
+            return;
+        }
+        errorEl.innerText = '';
+        try {
+            const res = await fetch('/api/auth/password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                closePasswordDialog();
+                showToast("Password Changed", "Use the new password next time you sign in.");
+            } else {
+                errorEl.innerText = data.error || 'Could not change the password.';
+            }
+        } catch (error) {
+            errorEl.innerText = 'Could not reach the server.';
         }
     }
 

@@ -1,423 +1,180 @@
 # Full implementation guide (Raspberry Pi OS Trixie, clean install)
 
-This guide builds a complete NTP + web management stack on a fresh Raspberry Pi OS Trixie install for this project.
+This guide sets up the complete NTP server + web management stack on Raspberry Pi OS Trixie.
 
 It configures:
 
-- Chrony NTP service (`chrony`)
-- Flask web backend (`ntp-webgui`)
-- Dedicated service user (`NTP`) with scoped sudo rights
-- Reverse proxy (`nginx`)
-- Local DNS for `ct.ntpserver.org` on LAN (`dnsmasq`)
+- Chrony NTP service (`chrony`), serving the LAN subnet
+- Flask web UI/API (`ntp-webgui`) on port 5000, behind a login
+- Dedicated service user (`ntp`) with scoped sudo rights
+- Static, closed LAN interface (no gateway, no DNS)
 - Inter-interface firewall isolation (`nftables`)
-- Closed LAN access path via `eth1` only
 
 ---
 
 ## 1. Target topology
 
-- **WAN**: `eth0` (internet/upstream)
+- **WAN**: `eth0` (internet/upstream NTP, usually DHCP)
 - **Wi-Fi**: `wlan0` (optional upstream)
-- **LAN**: `eth1` (isolated local subnet for clients)
-- **Web UI ingress**: `http://ct.ntpserver.org` on the **eth1 network only**
-
-Example LAN:
-
-- Pi `eth1`: `10.12.0.1/16`
-- DNS for clients: `10.12.0.1`
-- UI URL for clients: `http://ct.ntpserver.org`
+- **LAN**: `eth1` (isolated subnet for NTP clients), default `10.12.0.1/16`
+- **Web UI**: `http://<pi-address>:5000` from both WAN and LAN, e.g. `http://10.12.0.1:5000`
+- **Login**: default `admin` / `admin` (change it in the UI)
 
 ---
 
-## 2. Bootstrap repository behavior
+## 2. Install
 
-The bootstrap script treats `/opt/ntp-server-webgui-src` as a disposable/cacheable mirror. If local changes are present in the source repository, they will be automatically reset to match the remote origin state during bootstrap updates.
+### Option A: from a Windows PC (recommended)
 
----
+From the project folder:
 
-## 3. Clean OS preparation
-
-Run on the Pi as a sudo-capable user:
-
-```bash
-sudo apt-get update
-sudo apt-get -y full-upgrade
-sudo reboot
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy.ps1
 ```
 
-After reboot:
+`deploy.ps1` copies the project to the Pi with `scp`, runs `deploy/remote_install.sh` over `ssh` (which checks the interfaces and runs the bootstrap), and writes everything to `deploy.log`. Parameters: `-PiHost`, `-User`, `-Wan`, `-Lan`, `-LanIp`, `-LanPrefix`.
+
+### Option B: on the Pi
+
+Copy or clone the project to the Pi, then from its root:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y \
-  git rsync curl ca-certificates \
-  python3 python3-venv python3-pip \
-  chrony network-manager \
-  nginx dnsmasq
-```
-
-Enable/ensure required services:
-
-```bash
-sudo systemctl enable --now chrony
-sudo systemctl enable --now NetworkManager
-```
-
----
-
-## 3. Get project files onto the Pi
-
-Choose one:
-
-### Option A: clone directly
-
-```bash
-cd /tmp
-git clone <YOUR_REPO_URL> ntp-server-webgui
-cd ntp-server-webgui
-```
-
-### Option B: copy from your dev machine
-
-Copy the repository to the Pi, then `cd` into it.
-
-### Fast path: all-in-one bootstrap script
-
-If you want automated end-to-end setup on a clean Pi, run:
-
-```bash
-sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
-  REPO_BRANCH=main \
-  WIFI_INTERFACE=wlan0 \
-  LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
+sudo WAN_INTERFACE=eth0 LAN_INTERFACE=eth1 LAN_IP=10.12.0.1 LAN_PREFIX=16 \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
-This executes dependency installation, repo sync, user/sudo setup, service deployment, proxy+DNS, and firewall isolation in one flow.
-The bootstrap script asks whether WAN/LAN should be `eth0/eth1` or `eth1/eth0`. To skip the prompt, pass explicit `WAN_INTERFACE` and `LAN_INTERFACE`.
+By default the bootstrap installs from the copy it is run from. With `USE_LOCAL_SOURCE=0` it clones `REPO_URL` into `/opt/ntp-server-webgui-src` instead, which is treated as a disposable mirror (local changes are reset to the remote state).
+
+The bootstrap runs these steps, which can also be run on their own:
+
+| Step | Script | What it does |
+|---|---|---|
+| Packages | (bootstrap) | Installs git, rsync, python3-venv, chrony, network-manager, nftables, ... |
+| Chrony | (bootstrap) | Enables chrony; LAN `allow` rule + `local stratum 10` |
+| Users and sudo | `scripts/setup_ntp_user.sh` | Creates `ntp` (service, no login) and `ntp-admin`; sudoers in `/etc/sudoers.d/ntp-webgui`; `ntp` joins `systemd-journal` |
+| App and service | `scripts/setup_ntp_service.sh` | Syncs the app to `/opt/ntp-server-webgui`, creates the venv, installs and restarts `ntp-webgui.service` |
+| LAN | `scripts/setup_lan.sh` | Sets `LAN_IP/LAN_PREFIX` on the LAN port, removes duplicate profiles, installs `ntp-webgui-lan-refresh`, removes the nginx/dnsmasq setup of earlier versions |
+| Firewall | `scripts/setup_firewall_isolation.sh` | nftables: forwarding dropped except UDP/123 between LAN and WAN/Wi-Fi |
 
 ---
 
-## 4. Configure Chrony for LAN serving
+## 3. Service user and sudo policy
 
-Create a LAN server profile for chrony:
+`ntp` may run, without a password, only:
+
+- `/usr/bin/nmcli`
+- `/usr/bin/systemctl restart chrony`, `/usr/bin/systemctl reload chrony`
+- `/usr/sbin/reboot`, `/usr/bin/reboot`
+- `/usr/local/sbin/ntp-webgui-lan-refresh` (root-owned; validates its arguments and only rewrites chrony's LAN `allow` rule)
+
+Check:
 
 ```bash
-sudo tee /etc/chrony/conf.d/ntp-webgui-lan.conf >/dev/null <<'EOF'
-# Allow LAN clients from eth1 subnet
-allow 10.12.0.0/16
-
-# Keep serving time even if upstream is temporarily unavailable
-local stratum 10
-EOF
+sudo visudo -cf /etc/sudoers.d/ntp-webgui
+sudo -u ntp sudo -n /usr/bin/nmcli -t -f DEVICE,STATE device
 ```
 
-Restart and verify:
+---
+
+## 4. Login and credentials
+
+- Every page and `/api/` route requires a session; unauthenticated API calls get HTTP 401.
+- Credentials: `/var/lib/ntp-webgui/credentials.json` (systemd `StateDirectory`, mode 600, owner `ntp`). The password is stored as a salted scrypt hash. The file survives re-deploys.
+- Session signing key: `/var/lib/ntp-webgui/secret_key` (generated on first start).
+- Change the password with **Change Password** in the UI (minimum 6 characters).
+- Reset to `admin` / `admin`:
+
+  ```bash
+  sudo rm /var/lib/ntp-webgui/credentials.json && sudo systemctl restart ntp-webgui
+  ```
+
+The UI is served over plain HTTP, so the password crosses the network unencrypted. Keep access to trusted networks.
+
+---
+
+## 5. LAN client requirements
+
+- Static address in the LAN subnet (for example `10.12.0.50/16`); the Pi does not hand out addresses on the LAN.
+- NTP server: `10.12.0.1` (the Pi's LAN address).
+- Web UI: `http://10.12.0.1:5000`.
+
+When the LAN address is changed in the UI, the page moves to the new address automatically (you sign in again there, since the session belongs to the old address), and chrony's `allow` rule follows the new subnet.
+
+---
+
+## 6. Verification
+
+On the Pi:
 
 ```bash
-sudo systemctl restart chrony
+systemctl status ntp-webgui chrony nftables --no-pager
+ip -4 addr show eth1
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/login              # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/api/network/current # 401 without login
 chronyc tracking
-chronyc sources -v
+cat /etc/chrony/conf.d/ntp-webgui-lan.conf
+sudo nft list ruleset | sed -n '/chain forward/,/}/p'
 ```
 
-If your LAN subnet differs, change `allow` accordingly.
+From a LAN client: open `http://10.12.0.1:5000`, sign in, and check that the status panel updates.
 
 ---
 
-## 5. Create dedicated service user and sudo policy
-
-From repo root:
-
-```bash
-sudo bash scripts/setup_ntp_user.sh
-```
-
-What it does:
-
-- Creates `NTP` user (non-login shell).
-- Removes/locks local password.
-- Adds scoped passwordless sudo permissions for exactly:
-  - `/usr/bin/nmcli`
-  - `/usr/bin/systemctl restart chrony`
-  - `/usr/bin/systemctl reload chrony`
-  - `/usr/sbin/reboot` and `/usr/bin/reboot`
-
----
-
-## 6. Deploy app and systemd service
-
-From repo root:
-
-```bash
-sudo bash scripts/setup_ntp_service.sh
-```
-
-What it does:
-
-- Installs app to `/opt/ntp-server-webgui`
-- Creates virtual environment
-- Installs Python requirements
-- Installs and starts `ntp-webgui.service`
-
-Check service:
-
-```bash
-sudo systemctl status ntp-webgui --no-pager
-journalctl -u ntp-webgui -f
-```
-
----
-
-## 7. Configure proxy + DNS for `ct.ntpserver.org`
-
-From repo root:
-
-```bash
-sudo LAN_INTERFACE=eth1 LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
-  bash scripts/setup_proxy_dns.sh
-```
-
-What it does:
-
-- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/16` before validating nginx config.
-- Nginx listens on `10.12.0.1:80` and proxies to `127.0.0.1:5000`
-- dnsmasq maps `ct.ntpserver.org -> 10.12.0.1` on `${LAN_INTERFACE}`
-
-Validate:
-
-```bash
-sudo nginx -t
-sudo systemctl status nginx --no-pager
-sudo systemctl status dnsmasq --no-pager
-```
-
----
-
-## 8. Apply firewall isolation (allow only NTP between interfaces)
-
-From repo root:
-
-```bash
-sudo WAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 LAN_INTERFACE=eth1 \
-  bash scripts/setup_firewall_isolation.sh
-```
-
-What this does:
-
-- Installs/enables `nftables`.
-- Sets `FORWARD` default policy to `drop`.
-- Allows only UDP/123 forwarding between:
-  - `eth1` <-> `eth0`
-  - `eth1` <-> `wlan0`
-
-Result:
-
-- Internet traffic from WAN/Wi-Fi is blocked from flooding into the closed `eth1` network.
-- Only NTP traffic is forwarded between those networks.
-
-Validate:
-
-```bash
-sudo nft list ruleset
-```
-
----
-
-## 9. LAN client requirements (critical)
-
-Because there is no external DNS in this closed network, each LAN client must use:
-
-- **DNS server**: `10.12.0.1` (Pi `eth1` address)
-
-Then clients can open:
-
-- `http://ct.ntpserver.org`
-
-If clients do not use Pi DNS, hostname resolution will fail.
-
----
-
-## 10. Optional: provide DHCP on `eth1` from Pi
-
-If you want clients to auto-receive IP + DNS, add a dedicated dnsmasq DHCP config:
-
-```bash
-sudo tee /etc/dnsmasq.d/ntpserver-dhcp.conf >/dev/null <<'EOF'
-interface=eth1
-dhcp-range=10.12.0.50,10.12.0.200,255.255.0.0,24h
-dhcp-option=option:router,10.12.0.1
-dhcp-option=option:dns-server,10.12.0.1
-EOF
-```
-
-Then:
-
-```bash
-sudo systemctl restart dnsmasq
-```
-
-Use this only if you want the Pi to manage addressing on the LAN.
-
----
-
-## 11. Production hardening checklist
-
-1. Confirm service runs as `NTP`:
-   ```bash
-   systemctl show ntp-webgui -p User
-   ```
-2. Confirm Flask is not directly internet-exposed:
-   ```bash
-   sudo ss -ltnp | grep 5000
-   ```
-   It should bind to `127.0.0.1:5000`.
-3. Confirm nginx listens only on LAN IP:
-   ```bash
-   sudo ss -ltnp | grep ':80'
-   ```
-4. Confirm sudoers file is valid and scoped:
-   ```bash
-   sudo visudo -cf /etc/sudoers.d/ntp-webgui
-   sudo cat /etc/sudoers.d/ntp-webgui
-   ```
-5. Confirm chrony service health:
-   ```bash
-   systemctl status chrony --no-pager
-   chronyc tracking
-   ```
-6. Confirm forwarding policy and NTP-only exception:
-   ```bash
-   sudo nft list ruleset | sed -n '/chain forward/,/}/p'
-   ```
-
----
-
-## 12. End-to-end verification flow
-
-1. On Pi:
-   - `curl -I http://10.12.0.1`
-   - `curl -I http://127.0.0.1:5000`
-2. From LAN client on eth1 network:
-   - `nslookup ct.ntpserver.org 10.12.0.1`
-   - open `http://ct.ntpserver.org`
-3. In UI:
-   - verify status updates
-   - test WAN DHCP/static switch
-   - test Wi-Fi scan/connect (default DHCP, static optional)
-   - test LAN static update
-   - test Chrony restart action
-
----
-
-## 13. Troubleshooting
-
-### `ct.ntpserver.org` not resolving
-
-- Client DNS not set to `10.12.0.1`
-- dnsmasq not running
-- `dnsmasq.d` config typo
-
-Checks:
-
-```bash
-sudo systemctl status dnsmasq --no-pager
-sudo journalctl -u dnsmasq -n 100 --no-pager
-```
+## 7. Troubleshooting
 
 ### Web UI unreachable
 
-- nginx not listening on LAN IP
-- `eth1` IP differs from expected
-
-Checks:
-
 ```bash
-ip a show eth1
-sudo nginx -t
-sudo systemctl status nginx --no-pager
+systemctl status ntp-webgui --no-pager
+journalctl -u ntp-webgui -n 100 --no-pager
+ss -ltnp | grep 5000
 ```
 
-### Network actions fail in UI
+The UI is also reachable on the WAN address (`http://<wan-ip>:5000`), which helps if the LAN address was changed to something unexpected.
 
-- Missing/incorrect NetworkManager connection names
-- sudoers restrictions not applied
-
-Checks:
+### Network actions fail in the UI
 
 ```bash
-nmcli con show
-sudo -u NTP sudo -n /usr/bin/nmcli con show
-sudo -u NTP sudo -n /usr/bin/systemctl restart chrony
+nmcli -t -f NAME,UUID,DEVICE connection show
+sudo -u ntp sudo -n /usr/bin/nmcli con show
 ```
 
-### Unexpected traffic crossing between interfaces
+The app edits the NetworkManager profile that is active on each device (by UUID), so duplicate profile names are not a problem.
 
-- nftables not active
-- custom rules overwritten by another firewall manager
-
-Checks:
+### LAN clients cannot sync time
 
 ```bash
-sudo systemctl status nftables --no-pager
-sudo nft list ruleset
-```
-
-Re-apply:
-
-```bash
-sudo WAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 LAN_INTERFACE=eth1 \
-  bash scripts/setup_firewall_isolation.sh
+cat /etc/chrony/conf.d/ntp-webgui-lan.conf   # allow rule must match the LAN subnet
+sudo /usr/local/sbin/ntp-webgui-lan-refresh 10.12.0.1 16
+chronyc clients
 ```
 
 ### Chrony actions fail
 
-- service name mismatch (`chrony` vs `chronyd`)
-- chrony not installed/running
-
-Checks:
-
-```bash
-systemctl status chrony --no-pager
-```
-
-If needed, set `NTP_SERVICE_NAMES` in `/etc/systemd/system/ntp-webgui.service`.
+Check the service name (`chrony` vs `chronyd`) and set `NTP_SERVICE_NAMES` in the service unit if needed.
 
 ---
 
-## 14. Upgrade workflow
+## 8. Upgrade workflow
 
-After pulling updated repo content:
-
-```bash
-cd <repo-root>
-sudo bash scripts/setup_ntp_service.sh
-sudo systemctl restart ntp-webgui
-```
-
-Then verify service and UI accessibility again.
+Run `deploy.ps1` again (or the bootstrap on the Pi). It re-syncs the app, restarts the service and keeps the credentials.
 
 ## API routes
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/api/system/status` | `GET` | Return telemetry and chrony status |
-| `/api/system/ntp-logs` | `GET` | Get recent NTP logs |
-| `/api/system/ntp-sources` | `GET` | Get current NTP sources information |
-| `/api/system/service-status` | `GET` | Get status of all system services |
-| `/api/system/resources` | `GET` | Get detailed system resource usage |
-| `/api/network/wan` | `POST` | Set WAN DHCP or static config |
-| `/api/network/lan` | `POST` | Set LAN static config |
-| `/api/network/wifi/scan` | `GET` | Scan nearby Wi-Fi networks |
-| `/api/network/wifi` | `POST` | Connect to Wi-Fi |
+| `/login`, `/logout` | `GET`/`POST`, `POST` | Sign in / sign out |
+| `/api/auth/password` | `POST` | Change password |
+| `/api/system/status` | `GET` | Telemetry and chrony status |
+| `/api/system/ntp-logs` | `GET` | Recent chrony log lines |
+| `/api/system/ntp-sources` | `GET` | `chronyc sources -v` |
+| `/api/system/service-status` | `GET` | State of ntp-webgui, chrony, nftables, NetworkManager |
+| `/api/system/resources` | `GET` | Load, memory and disk usage |
+| `/api/network/interfaces` | `GET`/`POST` | Read or swap the WAN/LAN interface roles |
+| `/api/network/current` | `GET` | Current IPv4 address and DHCP/static mode per role |
+| `/api/network/wan` | `POST` | WAN DHCP or static (`ip`, `subnet`, optional `gateway`, `dns`) |
+| `/api/network/lan` | `POST` | LAN static address |
+| `/api/network/wifi/scan` | `GET` | Scan Wi-Fi networks |
+| `/api/network/wifi` | `POST` | Connect to Wi-Fi (DHCP or static) |
 | `/api/service/ntp` | `POST` | Restart or reload chrony |
-| `/api/service/reboot` | `POST` | Reboot the device |
-
-## Run locally
-
-To run the application in development mode, execute:
-
-```bash
-python3 app.py
-```
-
-The web UI will be accessible at [http://localhost:5000](http://localhost:5000) and all API endpoints are available under `/api/`.
+| `/api/service/reboot` | `POST` | Reboot the Pi |

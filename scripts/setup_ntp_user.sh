@@ -31,11 +31,14 @@ else
   echo "Created admin user ${ADMIN_USER}."
 fi
 
+# Lets the web UI read chrony logs without sudo.
+usermod -aG systemd-journal "${SERVICE_USER}"
+
 # No local password for service user.
 passwd -d "${SERVICE_USER}" >/dev/null 2>&1 || true
 passwd -l "${SERVICE_USER}" >/dev/null 2>&1 || true
 
-# Admin user has a password and can login
+# Admin user keeps its login; set its password with: sudo passwd ${ADMIN_USER}
 passwd -u "${ADMIN_USER}" >/dev/null 2>&1 || true
 
 cat > "${SUDOERS_FILE}" <<'EOF'
@@ -45,6 +48,7 @@ ntp ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony
 ntp ALL=(root) NOPASSWD: /usr/bin/systemctl reload chrony
 ntp ALL=(root) NOPASSWD: /usr/sbin/reboot
 ntp ALL=(root) NOPASSWD: /usr/bin/reboot
+ntp ALL=(root) NOPASSWD: /usr/local/sbin/ntp-webgui-lan-refresh
 
 # Optional admin convenience commands.
 ntp-admin ALL=(root) NOPASSWD: /usr/bin/systemctl restart chrony

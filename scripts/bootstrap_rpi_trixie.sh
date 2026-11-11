@@ -10,10 +10,20 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+SCRIPT_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_URL="${REPO_URL:-https://github.com/rinnetopi/NTP-server-webgui.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
-SRC_DIR="${SRC_DIR:-/opt/ntp-server-webgui-src}"
 APP_DIR="${APP_DIR:-/opt/ntp-server-webgui}"
+
+# Install from the copy this script lives in (e.g. a folder copied over with scp)
+# unless USE_LOCAL_SOURCE=0, in which case the repo is cloned/updated from REPO_URL.
+if [[ "${USE_LOCAL_SOURCE:-1}" == "1" && -f "${SCRIPT_REPO_DIR}/app.py" ]]; then
+  SRC_DIR="${SCRIPT_REPO_DIR}"
+  CLONE_REPO=0
+else
+  SRC_DIR="${SRC_DIR:-/opt/ntp-server-webgui-src}"
+  CLONE_REPO=1
+fi
 
 WAN_INTERFACE_SET="${WAN_INTERFACE:-}"
 LAN_INTERFACE_SET="${LAN_INTERFACE:-}"
@@ -21,7 +31,7 @@ WAN_INTERFACE="${WAN_INTERFACE:-}"
 WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
 LAN_INTERFACE="${LAN_INTERFACE:-}"
 LAN_IP="${LAN_IP:-10.12.0.1}"
-DOMAIN_NAME="${DOMAIN_NAME:-ct.ntpserver.org}"
+LAN_PREFIX="${LAN_PREFIX:-16}"
 SERVICE_USER="${SERVICE_USER:-ntp}"
 
 PACKAGES=(
@@ -173,6 +183,10 @@ prompt_wan_lan_mapping() {
   fi
 }
 
+lan_network_cidr() {
+  python3 -c 'import ipaddress,sys; print(ipaddress.ip_interface(sys.argv[1]).network)' "${LAN_IP}/${LAN_PREFIX}"
+}
+
 get_interface_ip() {
   local iface="$1"
   ip -4 -o addr show dev "${iface}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1
@@ -235,20 +249,18 @@ main() {
   mkdir -p /etc/chrony/conf.d
   cat > /etc/chrony/conf.d/ntp-webgui-lan.conf <<EOF
 # Allow LAN clients on the configured subnet
-allow ${LAN_IP%.*}.0/${LAN_PREFIX:-16}
+allow $(lan_network_cidr)
 
 # Keep serving time even if upstream is temporarily unavailable
 local stratum 10
 EOF
   systemctl restart chrony
 
-  log "Ensuring NetworkManager profile exists for LAN interface ${LAN_INTERFACE}"
-  if ! nmcli -g GENERAL.CONNECTION device show "${LAN_INTERFACE}" 2>/dev/null | grep -q .; then
-    nmcli con add type ethernet ifname "${LAN_INTERFACE}" con-name "${LAN_INTERFACE}" >/dev/null 2>&1 || true
+  if [[ "${CLONE_REPO}" == "1" ]]; then
+    clone_or_update_repo
+  else
+    log "Using local source in ${SRC_DIR} (set USE_LOCAL_SOURCE=0 to clone ${REPO_URL})"
   fi
-  nmcli con up "${LAN_INTERFACE}" >/dev/null 2>&1 || true
-
-  clone_or_update_repo
 
   if [[ ! -d "${SRC_DIR}/scripts" ]]; then
     echo "ERROR: scripts directory missing in ${SRC_DIR}"
@@ -263,6 +275,14 @@ EOF
   log "Deploying app and systemd service to ${APP_DIR}"
   WAN_INTERFACE="${WAN_INTERFACE}" LAN_INTERFACE="${LAN_INTERFACE}" WIFI_INTERFACE="${WIFI_INTERFACE}" APP_DIR="${APP_DIR}" \
     bash "${SRC_DIR}/scripts/setup_ntp_service.sh"
+
+  if [[ "${WAN_INTERFACE}" == "${LAN_INTERFACE}" ]]; then
+    log "WARN: single-interface mode; not assigning ${LAN_IP} (it would replace the WAN address)."
+  else
+    log "Configuring LAN ${LAN_INTERFACE}=${LAN_IP}/${LAN_PREFIX}"
+    LAN_INTERFACE="${LAN_INTERFACE}" LAN_IP="${LAN_IP}" LAN_PREFIX="${LAN_PREFIX}" \
+      bash "${SRC_DIR}/scripts/setup_lan.sh"
+  fi
 
   log "Applying inter-interface isolation firewall (NTP-only forwarding)"
   WAN_INTERFACE="${WAN_INTERFACE}" WIFI_INTERFACE="${WIFI_INTERFACE}" LAN_INTERFACE="${LAN_INTERFACE}" \
@@ -280,8 +300,7 @@ EOF
   echo "=== Install summary ==="
   echo "Repo source : ${SRC_DIR}"
   echo "App deploy  : ${APP_DIR}"
-  echo "Domain      : ${DOMAIN_NAME}"
-  echo "LAN IP (configured target) : ${LAN_IP}"
+  echo "LAN IP (configured target) : ${LAN_IP}/${LAN_PREFIX}"
   echo "LAN IP (${LAN_INTERFACE}, detected) : ${detected_lan_ip}"
   echo "Interfaces  : WAN=${WAN_INTERFACE}, Wi-Fi=${WIFI_INTERFACE}, LAN=${LAN_INTERFACE}"
   echo "Service user: ${SERVICE_USER}"
@@ -294,8 +313,9 @@ EOF
   echo "  nft list ruleset"
   echo
   echo "How to proceed:"
-  echo "  1) Open UI directly: http://${LAN_IP}:5000"
-  echo "  2) If needed, verify LAN IP on Pi: ip -4 addr show ${LAN_INTERFACE}"
+  echo "  1) From the LAN: http://${LAN_IP}:5000  (default login admin / admin - change it!)"
+  echo "  2) From the WAN side: http://$(get_interface_ip "${WAN_INTERFACE}"):5000"
+  echo "  3) If needed, verify LAN IP on Pi: ip -4 addr show ${LAN_INTERFACE}"
 }
 
 main "$@"

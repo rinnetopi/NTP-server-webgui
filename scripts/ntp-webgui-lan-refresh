@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Point chrony's 'allow' rule at the current LAN subnet so LAN clients can sync.
+#
+# Installed root-owned to /usr/local/sbin by setup_lan.sh. The web UI runs it
+# through a single sudoers rule after changing the LAN IP.
+#
+# Usage: ntp-webgui-lan-refresh <LAN_IP> <LAN_PREFIX>
+set -euo pipefail
+
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "Run as root." >&2
+  exit 1
+fi
+if [[ $# -ne 2 ]]; then
+  echo "Usage: $0 <LAN_IP> <LAN_PREFIX>" >&2
+  exit 2
+fi
+
+# Validate strictly: arguments arrive from the web UI.
+LAN_NETWORK="$(python3 - "$1" "$2" <<'PY'
+import ipaddress, sys
+ip, prefix = sys.argv[1], sys.argv[2]
+if not prefix.isdigit() or not 1 <= int(prefix) <= 30:
+    sys.exit("invalid prefix")
+try:
+    iface = ipaddress.IPv4Interface(f"{ip}/{prefix}")
+except ValueError:
+    sys.exit("invalid address")
+if str(iface.ip) != ip:
+    sys.exit("invalid address")
+print(iface.network)
+PY
+)" || { echo "Invalid LAN address $1/$2" >&2; exit 2; }
+LAN_IP="$1"
+
+mkdir -p /etc/chrony/conf.d
+cat > /etc/chrony/conf.d/ntp-webgui-lan.conf <<EOF
+# Allow LAN clients on the configured subnet (managed by ntp-webgui-lan-refresh)
+allow ${LAN_NETWORK}
+
+# Keep serving time even if upstream is temporarily unavailable
+local stratum 10
+EOF
+
+systemctl restart chrony
+
+echo "chrony now serves LAN clients in ${LAN_NETWORK} (LAN IP ${LAN_IP})."

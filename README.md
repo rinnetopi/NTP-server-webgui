@@ -2,45 +2,62 @@
 
 Web UI and API for Raspberry Pi NTP/network administration using Flask and `nmcli`.
 
-Current release version: **2.0.0**
+Current release version: **3.0.0**
 
-For full clean-install setup on Raspberry Pi OS Trixie (users, chrony, service, proxy, DNS, and LAN-only access), see:
+For full clean-install setup on Raspberry Pi OS Trixie (users, chrony, service, LAN address and firewall), see:
 
 - [`docs/IMPLEMENTATION-GUIDE-RPI-TRIXIE.md`](docs/IMPLEMENTATION-GUIDE-RPI-TRIXIE.md)
 
 ## Bootstrap repository behavior
 
-The bootstrap script treats `/opt/ntp-server-webgui-src` as a disposable/cacheable mirror. If local changes are present in the source repository, they will be automatically reset to match the remote origin state during bootstrap updates.
+By default the bootstrap script installs from the copy of the repository it is run from (for example a folder copied to the Pi with `scp`, or by `deploy.ps1`). Set `USE_LOCAL_SOURCE=0` to clone from `REPO_URL` instead; in that mode `/opt/ntp-server-webgui-src` is treated as a disposable mirror and local changes in it are reset to the remote state.
+
+## Deploy from a Windows PC
+
+`deploy.ps1` copies this folder to the Pi with `scp`, runs the bootstrap as root over `ssh`, and writes everything to `deploy.log`:
+
+```powershell
+.\deploy.ps1                       # defaults: ntp-admin@192.168.1.239
+.\deploy.ps1 -PiHost 192.168.1.50  # another Pi
+```
+
+## Login
+
+The UI and every `/api/` route require a login. The default account is **admin / admin**; change it with **Change Password** in the UI.
+Credentials are stored on the Pi in `/var/lib/ntp-webgui/credentials.json` (mode 600, owned by the service user, password stored as a salted scrypt hash, never in plain text). The file survives re-deploys. To reset to admin/admin, delete it and restart the service:
+
+```bash
+sudo rm /var/lib/ntp-webgui/credentials.json && sudo systemctl restart ntp-webgui
+```
 
 ## Features
 
 - Live system telemetry endpoint (`/api/system/status`) with temperature, load, uptime, and chrony state.
-- WAN (`eth0`) configuration endpoint for DHCP or static mode.
+- WAN (`eth0`) configuration endpoint for DHCP or static mode (static supports gateway and DNS).
 - LAN (`eth1`) isolated subnet configuration endpoint.
 - Wi-Fi scan and connect endpoints (`/api/network/wifi/scan`, `/api/network/wifi`).
 - Wi-Fi DHCP/static handling with SSID connection + connection profile update.
 - Service controls for chrony restart/reload and system reboot.
+- Login with a changeable password.
 
 ## Web UI Assets
 
-The web UI is designed to work completely offline. All assets are vendored locally to ensure no external dependencies:
-
-- Tailwind CSS: Local copy included in `static/assets/tailwind.min.js`
-- Font Awesome: Local CSS and webfont files in `static/assets/fontawesome.css` and `static/assets/fonts/fa-solid-900.woff2`
-- Inter font: Local variable font files in `static/assets/fonts/Inter-roman.var.woff2` and `static/assets/fonts/Inter-italic.var.woff2`
-
-The HTML template references these with Flask `url_for('static', filename=...)` helpers to keep paths stable behind reverse proxy setups.
+The web UI works completely offline: styles and icons (inline SVG) live in `templates/index.html`, and the Inter font is served locally from `static/assets/site.css` and `static/assets/fonts/`.
 
 ## API routes
 
 | Route | Method | Purpose |
 |---|---|---|
+| `/login`, `/logout` | `GET`/`POST`, `POST` | Sign in / sign out (all other routes need a session) |
+| `/api/auth/password` | `POST` | Change password (`current_password`, `new_password`, `confirm_password`) |
 | `/api/system/status` | `GET` | Return telemetry and chrony status |
 | `/api/system/ntp-logs` | `GET` | Get recent NTP logs |
 | `/api/system/ntp-sources` | `GET` | Get current NTP sources information |
 | `/api/system/service-status` | `GET` | Get status of all system services |
 | `/api/system/resources` | `GET` | Get detailed system resource usage |
-| `/api/network/wan` | `POST` | Set WAN DHCP or static config |
+| `/api/network/interfaces` | `GET`/`POST` | Read or swap the WAN/LAN interface roles |
+| `/api/network/current` | `GET` | Current IPv4 address and DHCP/static mode per role |
+| `/api/network/wan` | `POST` | Set WAN DHCP or static config (`ip`, `subnet`, optional `gateway`, `dns`) |
 | `/api/network/lan` | `POST` | Set LAN static config |
 | `/api/network/wifi/scan` | `GET` | Scan nearby Wi-Fi networks |
 | `/api/network/wifi` | `POST` | Connect to Wi-Fi |
@@ -53,10 +70,11 @@ The HTML template references these with Flask `url_for('static', filename=...)` 
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export STATE_DIRECTORY="$PWD/.state" RUNTIME_ENV_PATH="$PWD/.state/runtime.env"
 python3 app.py
 ```
 
-Open `http://127.0.0.1:5000`.
+Open `http://127.0.0.1:5000` and sign in with `admin` / `admin`. Login data is kept in `.state/` (git-ignored).
 
 ## Sandbox testbench (safe, no system changes)
 
@@ -83,7 +101,7 @@ This repo now defaults to:
 - Wi-Fi: `wlan0`
 - LAN: `eth1`
 - NTP service: `chrony`
-- Flask bind: `127.0.0.1:5000` (for reverse proxy)
+- Web UI: Flask on `0.0.0.0:5000`, reachable from both WAN and LAN (`http://<pi-address>:5000`)
 
 During bootstrap, installer now asks which Ethernet adapter should be WAN vs LAN (swap between `eth0` and `eth1`).
 
@@ -93,24 +111,24 @@ During bootstrap, installer now asks which Ethernet adapter should be WAN vs LAN
 sudo REPO_URL=https://github.com/rinnetopi/NTP-server-webgui.git \
   REPO_BRANCH=main \
   WIFI_INTERFACE=wlan0 \
-  LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
+  LAN_IP=10.12.0.1 \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
 This script will:
 
 - install missing system dependencies
-- clone/update repo into `/opt/ntp-server-webgui-src`
-- create `NTP` user + sudo rules
+- use the local copy (or clone/update into `/opt/ntp-server-webgui-src` with `USE_LOCAL_SOURCE=0`)
+- create `ntp` user + sudo rules
 - deploy app/service to `/opt/ntp-server-webgui`
-- configure nginx + dnsmasq for `ct.ntpserver.org`
+- set the LAN interface to `LAN_IP/LAN_PREFIX` (default `10.12.0.1/16`) and point chrony's `allow` rule at that subnet
 - enforce nftables isolation (NTP-only forwarding between interfaces)
 
 If you want to skip the prompt and force mapping, pass explicit values:
 
 ```bash
 sudo WAN_INTERFACE=eth1 LAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 \
-  LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org \
+  LAN_IP=10.12.0.1 \
   bash scripts/bootstrap_rpi_trixie.sh
 ```
 
@@ -120,12 +138,15 @@ sudo WAN_INTERFACE=eth1 LAN_INTERFACE=eth0 WIFI_INTERFACE=wlan0 \
 sudo bash scripts/setup_ntp_user.sh
 ```
 
-This creates user `NTP` (no local password login) and grants passwordless sudo only for:
+This creates user `ntp` (no local password login) and grants passwordless sudo only for:
 
 - `nmcli`
 - `systemctl restart chrony`
 - `systemctl reload chrony`
 - `reboot`
+- `/usr/local/sbin/ntp-webgui-lan-refresh` (updates chrony's LAN `allow` rule after a LAN IP change)
+
+and adds it to the `systemd-journal` group so the UI can read chrony logs.
 
 ### 2. Deploy app and systemd service
 
@@ -135,21 +156,19 @@ sudo bash scripts/setup_ntp_service.sh
 
 This installs into `/opt/ntp-server-webgui`, creates a venv, installs dependencies, and starts `ntp-webgui.service`.
 
-### 3. Enable proxy + local DNS for `ct.ntpserver.org` on closed LAN (`eth1`)
+### 3. Configure the LAN interface
 
 ```bash
-sudo LAN_INTERFACE=eth1 LAN_IP=10.12.0.1 DOMAIN_NAME=ct.ntpserver.org bash scripts/setup_proxy_dns.sh
+sudo LAN_INTERFACE=eth1 LAN_IP=10.12.0.1 LAN_PREFIX=16 bash scripts/setup_lan.sh
 ```
 
 What this does:
 
-- Ensures `${LAN_INTERFACE}` has `${LAN_IP}/16` before validating nginx config.
-- Nginx listens only on `10.12.0.1:80` and proxies to `127.0.0.1:5000`.
-- dnsmasq resolves `ct.ntpserver.org` to `10.12.0.1` on `${LAN_INTERFACE}`.
+- Sets `${LAN_INTERFACE}` to `${LAN_IP}/${LAN_PREFIX}` with no gateway and no DNS (closed network) and removes duplicate NetworkManager profiles for that port.
+- Installs `/usr/local/sbin/ntp-webgui-lan-refresh` (root-owned) and runs it so chrony serves the LAN subnet. The UI runs it via sudo after a LAN IP change.
+- Removes the nginx/dnsmasq setup used by earlier versions (set `KEEP_NGINX_DNSMASQ=1` to keep the packages installed).
 
-Critical requirement for clients on the closed network:
-
-- Their DNS server must be set to `10.12.0.1` (the Pi on `eth1`), otherwise `ct.ntpserver.org` will not resolve.
+LAN clients open the UI at `http://10.12.0.1:5000` and use `10.12.0.1` as their NTP server.
 
 ### 4. Enforce network isolation firewall (NTP-only forwarding)
 
@@ -161,28 +180,7 @@ This blocks forwarding between WAN/Wi-Fi and LAN by default and permits only UDP
 
 ## Run as a systemd service
 
-1. Install app files:
-
-   ```bash
-   sudo cp -r . /opt/ntp-server-webgui
-   ```
-
-2. Install Python dependencies:
-
-   ```bash
-   cd /opt/ntp-server-webgui
-   sudo python3 -m pip install -r requirements.txt
-   ```
-
-3. Install and enable service:
-
-   ```bash
-   sudo cp deploy/ntp-webgui.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now ntp-webgui
-   ```
-
-4. Inspect service logs:
+`scripts/setup_ntp_service.sh` installs the app into `/opt/ntp-server-webgui` with its own virtualenv and (re)starts `ntp-webgui.service`. Inspect it with:
 
    ```bash
    sudo systemctl status ntp-webgui
@@ -197,9 +195,7 @@ This blocks forwarding between WAN/Wi-Fi and LAN by default and permits only UDP
 
 ## Deployment configuration values
 
-- `WAN_CONNECTION_NAME` (default: `eth0`)
-- `LAN_CONNECTION_NAME` (default: `eth1`)
-- `WIFI_CONNECTION_NAME` (default: `wlan0`)
+- `WAN_CONNECTION_NAME` (default: `eth0`), `LAN_CONNECTION_NAME` (default: `eth1`), `WIFI_CONNECTION_NAME` (default: `wlan0`): despite the names these are **device** names; the app looks up the NetworkManager profile active on each device.
 - Runtime mapping file: `/opt/ntp-server-webgui/runtime.env` (created by setup scripts and editable from UI)
 - `NTP_SERVICE_NAMES` (default: `chrony`)
 - Presence of `chronyc`, `nmcli`, and `systemctl` on target OS

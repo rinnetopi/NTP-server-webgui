@@ -6,6 +6,9 @@ After=network.target
 Type=simple
 User=ntp
 WorkingDirectory=/opt/ntp-server-webgui
+# Login credentials + session key live here (survives re-deploys)
+StateDirectory=ntp-webgui
+StateDirectoryMode=0700
 ExecStart=/opt/ntp-server-webgui/.venv/bin/python /opt/ntp-server-webgui/app.py
 Restart=on-failure
 RestartSec=5

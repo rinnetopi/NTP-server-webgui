@@ -28,6 +28,10 @@ rsync -a --delete \
   --exclude ".git" \
   --exclude "__pycache__" \
   --exclude ".venv" \
+  --exclude ".vscode" \
+  --exclude "*.pdf" \
+  --exclude "deploy.ps1" \
+  --exclude "deploy.log" \
   "${SRC_DIR}/" "${APP_DIR}/"
 
 python3 -m venv "${APP_DIR}/.venv"
@@ -45,7 +49,9 @@ EOF
 chown -R "${USER_NAME}:${USER_NAME}" "${APP_DIR}"
 
 systemctl daemon-reload
-systemctl enable --now ntp-webgui
+systemctl enable ntp-webgui
+# restart (not just start) so a re-deploy picks up new code and group membership
+systemctl restart ntp-webgui
 systemctl status ntp-webgui --no-pager
 
 echo "NTP web GUI service deployed and started."
